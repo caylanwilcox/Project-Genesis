@@ -1,11 +1,7 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-
-const TradingView = dynamic(() => import('@/components/TradingView').then(m => m.TradingView), {
-  ssr: false,
-})
+import Dashboard from './dashboard/page'
 
 export default function Home() {
-  return <TradingView />
+  return <Dashboard />
 }
