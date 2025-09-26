@@ -1,3 +1,4 @@
 {
+  "/ticker/[symbol]/page": "app/ticker/[symbol]/page.js",
   "/page": "app/page.js"
 }
