@@ -55,12 +55,6 @@ export const PriceChart: React.FC<PriceChartProps> = ({
           borderColor: '#1E222D',
           timeVisible: true,
         },
-        watermark: {
-          visible: true,
-          fontSize: 10,
-          color: 'rgba(255, 255, 255, 0.05)', // Make it almost invisible
-          text: '',
-        },
       });
 
       // Create a line series (v5 syntax)
@@ -200,12 +194,13 @@ export const PriceChart: React.FC<PriceChartProps> = ({
             <Activity size={18} className="text-gray-400 cursor-pointer hover:text-white" />
             <TrendingUp size={18} className="text-gray-400 cursor-pointer hover:text-white" />
             <Settings size={18} className="text-gray-400 cursor-pointer hover:text-white" />
-            <Maximize2
-              size={18}
-              className="text-gray-400 cursor-pointer hover:text-white"
-              onClick={() => router.push(`/ticker/${symbol}`)}
-              title="Open full chart"
-            />
+            <div title="Open full chart">
+              <Maximize2
+                size={18}
+                className="text-gray-400 cursor-pointer hover:text-white"
+                onClick={() => router.push(`/ticker/${symbol}`)}
+              />
+            </div>
           </div>
         </div>
       </div>
