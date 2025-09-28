@@ -1,0 +1,101 @@
+/* Mathematical Responsive Variables */
+:root {
+  /* Viewport-based scaling factors */
+  --viewport-width: 100vw;
+  --viewport-height: 100vh;
+
+  /* Base scaling unit - 1% of viewport width */
+  --base-unit: 1vw;
+
+  /* Golden ratio for perfect symmetry */
+  --golden-ratio: 1.618;
+  --inverse-golden: 0.618;
+
+  /* Mathematical scaling system */
+  --scale-xs: calc(var(--base-unit) * 0.5);    /* 0.5vw */
+  --scale-sm: calc(var(--base-unit) * 0.75);   /* 0.75vw */
+  --scale-md: calc(var(--base-unit) * 1);      /* 1vw */
+  --scale-lg: calc(var(--base-unit) * 1.25);   /* 1.25vw */
+  --scale-xl: calc(var(--base-unit) * 1.5);    /* 1.5vw */
+  --scale-2xl: calc(var(--base-unit) * 2);     /* 2vw */
+  --scale-3xl: calc(var(--base-unit) * 2.5);   /* 2.5vw */
+
+  /* Text scaling - dramatically optimized for TV viewing distance */
+  --text-xs: clamp(1.5rem, 3vh, 2.5rem);            /* 24px - 40px */
+  --text-sm: clamp(1.75rem, 3.5vh, 3rem);           /* 28px - 48px */
+  --text-base: clamp(2rem, 4vh, 3.5rem);            /* 32px - 56px */
+  --text-lg: clamp(2.5rem, 5vh, 4rem);              /* 40px - 64px */
+  --text-xl: clamp(3rem, 6vh, 5rem);                /* 48px - 80px */
+  --text-2xl: clamp(3.5rem, 7vh, 6rem);             /* 56px - 96px */
+  --text-3xl: clamp(4rem, 8vh, 7rem);               /* 64px - 112px */
+  --text-4xl: clamp(5rem, 10vh, 8rem);              /* 80px - 128px */
+  --text-5xl: clamp(6rem, 12vh, 10rem);             /* 96px - 160px */
+
+  /* Spacing system - dramatically increased for TV display */
+  --space-1: clamp(1rem, 2vh, 2rem);                /* 16px - 32px */
+  --space-2: clamp(1.5rem, 3vh, 3rem);              /* 24px - 48px */
+  --space-3: clamp(2rem, 4vh, 4rem);                /* 32px - 64px */
+  --space-4: clamp(2.5rem, 5vh, 5rem);              /* 40px - 80px */
+  --space-5: clamp(3rem, 6vh, 6rem);                /* 48px - 96px */
+  --space-6: clamp(4rem, 8vh, 8rem);                /* 64px - 128px */
+  --space-8: clamp(5rem, 10vh, 10rem);              /* 80px - 160px */
+  --space-10: clamp(6rem, 12vh, 12rem);             /* 96px - 192px */
+
+  /* Card dimensions - proportional to viewport */
+  --card-min-height: calc(var(--viewport-height) * 0.4);    /* 40% of viewport height */
+  --card-max-height: calc(var(--viewport-height) * 0.45);   /* 45% of viewport height */
+
+  /* Grid spacing - mathematically consistent */
+  --grid-gap: clamp(0rem, 0.5vw, 0.5rem);
+  --grid-padding: clamp(0.5rem, 1vw, 1rem);
+
+  /* Signal badge dimensions - dramatically enlarged for TV viewing */
+  --signal-badge-width: clamp(18rem, 30vh, 25rem);
+  --signal-badge-height: clamp(12rem, 20vh, 18rem);
+
+  /* Border radius - consistent scaling */
+  --radius-sm: clamp(0.25rem, 0.5vw, 0.375rem);
+  --radius-md: clamp(0.375rem, 0.75vw, 0.5rem);
+  --radius-lg: clamp(0.5rem, 1vw, 0.75rem);
+  --radius-xl: clamp(0.75rem, 1.5vw, 1rem);
+}
+
+/* Breakpoint-specific adjustments */
+@media (max-width: 480px) {
+  :root {
+    --base-unit: 2vw; /* Larger base unit for mobile */
+    --card-min-height: calc(var(--viewport-height) * 0.2);
+    --card-max-height: calc(var(--viewport-height) * 0.22);
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  :root {
+    --base-unit: 1.5vw; /* Medium base unit for tablets */
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  :root {
+    --base-unit: 1.2vw; /* Smaller base unit for small laptops */
+  }
+}
+
+@media (min-width: 1025px) {
+  :root {
+    --base-unit: 1vw; /* Standard base unit for desktop */
+  }
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --base-unit: 0.8vw; /* Even smaller for large screens */
+  }
+}
+
+/* Ultra-wide support */
+@media (min-width: 1920px) {
+  :root {
+    --base-unit: 0.6vw; /* Minimal scaling for ultra-wide */
+  }
+}

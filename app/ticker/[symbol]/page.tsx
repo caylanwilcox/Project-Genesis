@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 
-const PriceChart = dynamic(() => import('@/components/PriceChart').then(m => m.PriceChart), {
+const ProfessionalChart = dynamic(() => import('@/components/ProfessionalChart').then(m => m.ProfessionalChart), {
   ssr: false,
 })
 
@@ -297,7 +297,15 @@ export default function TickerPage() {
   }, [ticker])
 
   if (!ticker) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white mb-4"></div>
+          <div className="text-white text-lg font-medium">Loading ticker data...</div>
+          <div className="text-gray-400 text-sm mt-2">Please wait while we fetch the latest information</div>
+        </div>
+      </div>
+    )
   }
 
   const getSignalColor = (signal: string) => {
@@ -309,58 +317,74 @@ export default function TickerPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 py-4">
-        <div className="max-w-7xl mx-auto px-4">
+    <div className="min-h-screen bg-black text-white animate-in fade-in duration-300">
+      {/* Ticker Header Section */}
+      <header className="bg-gray-900 border-b border-gray-800 py-4 px-4">
+        <div className="max-w-7xl mx-auto">
           <button
             onClick={() => router.push('/')}
-            className="mb-2 text-sm text-gray-500 hover:text-white transition-colors"
+            className="mb-4 text-sm text-gray-500 hover:text-white transition-colors flex items-center gap-2"
           >
             ← Back to Dashboard
           </button>
-          <div className="flex items-baseline justify-between">
-            <div className="flex items-baseline gap-6">
-              <h1 className="text-3xl font-bold">{ticker.symbol}</h1>
-              <span className="text-2xl">${livePrice.toFixed(2)}</span>
-              <span className={`text-lg ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {ticker.change >= 0 ? '+' : ''}{ticker.change.toFixed(2)} ({ticker.changePercent.toFixed(2)}%)
-              </span>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-baseline gap-4 sm:gap-6">
+              <h1 className="text-2xl sm:text-3xl font-bold">{ticker.symbol}</h1>
+              <div className="flex items-baseline gap-3">
+                <span className="text-xl sm:text-2xl font-semibold transition-all duration-200 hover:text-green-300">
+                  ${livePrice.toFixed(2)}
+                </span>
+                <span className={`text-base sm:text-lg font-medium transition-colors ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {ticker.change >= 0 ? '+' : ''}{ticker.change.toFixed(2)} ({ticker.changePercent.toFixed(2)}%)
+                </span>
+              </div>
             </div>
-            <div className={`px-6 py-2 rounded-lg text-lg font-bold ${
+            <div className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-lg font-bold text-center ${
               ticker.signal === 'strong_buy' ? 'bg-green-500/20 text-green-400 border border-green-500' :
               ticker.signal === 'buy' ? 'bg-green-400/20 text-green-300 border border-green-400' :
               ticker.signal === 'neutral' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500' :
               ticker.signal === 'sell' ? 'bg-red-400/20 text-red-300 border border-red-400' :
               'bg-red-500/20 text-red-400 border border-red-500'
             }`}>
-              {ticker.recommendation} • AI: {ticker.confidence}%
+              {ticker.recommendation}
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Chart */}
-      <div className="bg-gray-900 border-b border-gray-800">
-        <div className="h-[500px]">
-          <PriceChart symbol={ticker.symbol} />
+      {/* Price Chart Section */}
+      <section className="bg-gray-900 border-b border-gray-800 py-4">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="max-w-[85%] mx-auto h-[320px] sm:h-[380px] lg:h-[420px] relative">
+            <ProfessionalChart
+              symbol={ticker.symbol}
+              currentPrice={livePrice}
+              stopLoss={ticker.risk.stopLoss}
+              targets={[
+                ticker.targets.target1.price,
+                ticker.targets.target2.price,
+                ticker.targets.target3.price
+              ]}
+              entryPoint={ticker.entryPoints.optimalEntry}
+            />
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Multi-Timeframe Analysis Bar */}
-      <div className="bg-gray-900 border-b border-gray-800 p-4">
+      {/* Timeframe Analysis Section */}
+      <section className="bg-gray-900 border-b border-gray-800 p-4">
         <div className="max-w-7xl mx-auto">
-          <h3 className="text-sm text-gray-400 mb-3">MULTI-TIMEFRAME ANALYSIS</h3>
-          <div className="grid grid-cols-6 gap-4">
+          <h3 className="text-sm text-gray-400 mb-4 font-semibold tracking-wider">MULTI-TIMEFRAME ANALYSIS</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
             {ticker.timeframes.map((tf) => (
-              <div key={tf.timeframe} className="text-center">
-                <div className="text-xs text-gray-500 mb-1">{tf.timeframe}</div>
-                <div className={`text-sm font-bold ${getSignalColor(tf.signal)}`}>
+              <div key={tf.timeframe} className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+                <div className="text-xs text-gray-500 mb-2 font-medium">{tf.timeframe}</div>
+                <div className={`text-xs sm:text-sm font-bold mb-2 ${getSignalColor(tf.signal)}`}>
                   {tf.signal}
                 </div>
-                <div className="mt-1 w-full h-1 bg-gray-800 rounded">
+                <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded transition-all ${
+                    className={`h-full rounded-full transition-all duration-300 ${
                       tf.signal.includes('Buy') ? 'bg-green-400' :
                       tf.signal.includes('Sell') ? 'bg-red-400' :
                       'bg-yellow-400'
@@ -368,216 +392,281 @@ export default function TickerPage() {
                     style={{ width: `${tf.strength}%` }}
                   />
                 </div>
+                <div className="text-xs text-gray-500 mt-1">{tf.strength}%</div>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Main Analysis Grid */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-4 gap-6 mb-8">
-          {/* Entry Points */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-blue-400 font-semibold mb-4 uppercase text-sm tracking-wider">Entry Points</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="text-gray-500 text-sm">Current Support</div>
-                <div className="text-xl font-semibold">${ticker.entryPoints.support.toFixed(2)}</div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Recommended Entry</div>
-                <div className="text-xl font-semibold">{ticker.entryPoints.recommendedEntry}</div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Optimal Entry</div>
-                <div className="text-xl font-semibold text-cyan-400">${ticker.entryPoints.optimalEntry.toFixed(2)}</div>
-              </div>
+      {/* Main Trading Analysis Section */}
+      <main className="max-w-7xl mx-auto px-4 py-4 sm:py-6">
+        {/* Primary Trading Metrics */}
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          {/* Entry Points Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+              <h3 className="text-blue-400 font-semibold uppercase text-sm tracking-wider">Entry Points</h3>
             </div>
-          </div>
-
-          {/* Target Levels */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-green-400 font-semibold mb-4 uppercase text-sm tracking-wider">Target Levels</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="text-gray-500 text-sm">Target 1</div>
-                <div className="text-xl font-semibold">
-                  ${ticker.targets.target1.price.toFixed(2)}
-                  <span className="text-green-400 text-sm ml-2">(+{ticker.targets.target1.percent}%)</span>
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Target 2</div>
-                <div className="text-xl font-semibold">
-                  ${ticker.targets.target2.price.toFixed(2)}
-                  <span className="text-green-400 text-sm ml-2">(+{ticker.targets.target2.percent}%)</span>
-                </div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Target 3</div>
-                <div className="text-xl font-semibold">
-                  ${ticker.targets.target3.price.toFixed(2)}
-                  <span className="text-green-500 text-sm ml-2">(+{ticker.targets.target3.percent}%)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Risk Management */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-red-400 font-semibold mb-4 uppercase text-sm tracking-wider">Risk Management</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="text-gray-500 text-sm">Stop Loss</div>
-                <div className="text-xl font-semibold text-red-400">${ticker.risk.stopLoss.toFixed(2)}</div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Risk/Reward</div>
-                <div className="text-xl font-semibold">{ticker.risk.riskRewardRatio}</div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Max Drawdown</div>
-                <div className="text-xl font-semibold">{ticker.risk.maxDrawdown}%</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Market Conditions */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-purple-400 font-semibold mb-4 uppercase text-sm tracking-wider">Market Conditions</h3>
-            <div className="space-y-3">
-              <div>
-                <div className="text-gray-500 text-sm">Trend</div>
-                <div className="text-lg font-semibold">{ticker.marketConditions.trend}</div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">Volume</div>
-                <div className="text-lg font-semibold">{ticker.marketConditions.volume}</div>
-              </div>
-              <div>
-                <div className="text-gray-500 text-sm">RSI</div>
-                <div className={`text-lg font-semibold ${
-                  ticker.marketConditions.rsi > 70 ? 'text-red-400' :
-                  ticker.marketConditions.rsi < 30 ? 'text-green-400' :
-                  'text-yellow-400'
-                }`}>{ticker.marketConditions.rsi}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Additional Analysis Row */}
-        <div className="grid grid-cols-3 gap-6">
-          {/* Market Sentiment */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-cyan-400 font-semibold mb-4 uppercase text-sm tracking-wider">Market Sentiment</h3>
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-500 text-sm">Retail Sentiment</span>
-                  <span className="text-white font-semibold">{ticker.sentiment.retail}%</span>
-                </div>
-                <div className="w-full h-2 bg-gray-800 rounded">
-                  <div className="h-full bg-blue-400 rounded" style={{ width: `${ticker.sentiment.retail}%` }} />
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Current Support</div>
+                <div className="text-lg sm:text-xl font-bold">${ticker.entryPoints.support.toFixed(2)}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Recommended Entry</div>
+                <div className="text-sm sm:text-base font-semibold">{ticker.entryPoints.recommendedEntry}</div>
+              </div>
+              <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Optimal Entry</div>
+                <div className="text-lg sm:text-xl font-bold text-cyan-400">${ticker.entryPoints.optimalEntry.toFixed(2)}</div>
+              </div>
+            </div>
+          </article>
+
+          {/* Target Levels Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+              <h3 className="text-green-400 font-semibold uppercase text-sm tracking-wider">Target Levels</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Target 1</div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                  <div className="text-lg sm:text-xl font-bold">${ticker.targets.target1.price.toFixed(2)}</div>
+                  <span className="text-green-400 text-xs sm:text-sm font-semibold">+{ticker.targets.target1.percent}%</span>
                 </div>
               </div>
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-500 text-sm">Institutional</span>
-                  <span className="text-white font-semibold">{ticker.sentiment.institutional}%</span>
-                </div>
-                <div className="w-full h-2 bg-gray-800 rounded">
-                  <div className="h-full bg-purple-400 rounded" style={{ width: `${ticker.sentiment.institutional}%` }} />
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Target 2</div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                  <div className="text-lg sm:text-xl font-bold">${ticker.targets.target2.price.toFixed(2)}</div>
+                  <span className="text-green-400 text-xs sm:text-sm font-semibold">+{ticker.targets.target2.percent}%</span>
                 </div>
               </div>
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-500 text-sm">Smart Money</span>
-                  <span className="text-white font-semibold">{ticker.sentiment.smartMoney}%</span>
-                </div>
-                <div className="w-full h-2 bg-gray-800 rounded">
-                  <div className="h-full bg-yellow-400 rounded" style={{ width: `${ticker.sentiment.smartMoney}%` }} />
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Target 3</div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                  <div className="text-lg sm:text-xl font-bold text-green-400">${ticker.targets.target3.price.toFixed(2)}</div>
+                  <span className="text-green-400 text-xs sm:text-sm font-semibold">+{ticker.targets.target3.percent}%</span>
                 </div>
               </div>
-              <div className="text-center mt-4 pt-4 border-t border-gray-700">
-                <div className="text-gray-500 text-sm">Overall Sentiment</div>
-                <div className={`text-xl font-bold mt-1 ${
+            </div>
+          </article>
+
+          {/* Risk Management Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+              <h3 className="text-red-400 font-semibold uppercase text-sm tracking-wider">Risk Management</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Stop Loss</div>
+                <div className="text-lg sm:text-xl font-bold text-red-400">${ticker.risk.stopLoss.toFixed(2)}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Risk/Reward</div>
+                <div className="text-lg sm:text-xl font-bold">{ticker.risk.riskRewardRatio}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Max Drawdown</div>
+                <div className="text-lg sm:text-xl font-bold">{ticker.risk.maxDrawdown}%</div>
+              </div>
+            </div>
+          </article>
+
+          {/* Market Conditions Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+              <h3 className="text-purple-400 font-semibold uppercase text-sm tracking-wider">Market Conditions</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Trend</div>
+                <div className="text-sm sm:text-base font-semibold">{ticker.marketConditions.trend}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">Volume</div>
+                <div className="text-sm sm:text-base font-semibold">{ticker.marketConditions.volume}</div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="text-gray-400 text-xs font-medium mb-1">RSI</div>
+                <div className="flex items-center justify-between">
+                  <div className={`text-lg sm:text-xl font-bold ${
+                    ticker.marketConditions.rsi > 70 ? 'text-red-400' :
+                    ticker.marketConditions.rsi < 30 ? 'text-green-400' :
+                    'text-yellow-400'
+                  }`}>{ticker.marketConditions.rsi}</div>
+                  <div className={`text-xs font-medium px-2 py-1 rounded ${
+                    ticker.marketConditions.rsi > 70 ? 'bg-red-500/20 text-red-400' :
+                    ticker.marketConditions.rsi < 30 ? 'bg-green-500/20 text-green-400' :
+                    'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {ticker.marketConditions.rsi > 70 ? 'Overbought' :
+                     ticker.marketConditions.rsi < 30 ? 'Oversold' :
+                     'Normal'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        {/* Key Exit Points Summary */}
+        <section className="flex justify-center mb-4 sm:mb-6">
+          <div className="bg-gray-900 rounded-lg p-3 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-6 sm:gap-8">
+              <div className="text-center">
+                <div className="text-gray-400 text-xs font-medium mb-1">Sell Target</div>
+                <div className="text-green-400 font-bold text-base">${ticker.targets.target3.price.toFixed(2)}</div>
+                <div className="text-green-400 text-xs">+{ticker.targets.target3.percent}%</div>
+              </div>
+              <div className="w-px h-6 bg-gray-700"></div>
+              <div className="text-center">
+                <div className="text-gray-400 text-xs font-medium mb-1">Stop Loss</div>
+                <div className="text-red-400 font-bold text-base">${ticker.risk.stopLoss.toFixed(2)}</div>
+                <div className="text-red-400 text-xs">-{((ticker.price - ticker.risk.stopLoss) / ticker.price * 100).toFixed(1)}%</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Advanced Market Analysis */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+          {/* Market Sentiment Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
+              <h3 className="text-cyan-400 font-semibold uppercase text-sm tracking-wider">Market Sentiment</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-400 text-xs font-medium">Retail Sentiment</span>
+                  <span className="text-white font-bold text-sm">{ticker.sentiment.retail}%</span>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-400 rounded-full transition-all duration-300" style={{ width: `${ticker.sentiment.retail}%` }} />
+                </div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-400 text-xs font-medium">Institutional</span>
+                  <span className="text-white font-bold text-sm">{ticker.sentiment.institutional}%</span>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-purple-400 rounded-full transition-all duration-300" style={{ width: `${ticker.sentiment.institutional}%` }} />
+                </div>
+              </div>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between mb-2">
+                  <span className="text-gray-400 text-xs font-medium">Smart Money</span>
+                  <span className="text-white font-bold text-sm">{ticker.sentiment.smartMoney}%</span>
+                </div>
+                <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-yellow-400 rounded-full transition-all duration-300" style={{ width: `${ticker.sentiment.smartMoney}%` }} />
+                </div>
+              </div>
+              <div className="text-center mt-4 pt-4 border-t border-gray-700/50">
+                <div className="text-gray-400 text-xs font-medium mb-2">Overall Sentiment</div>
+                <div className={`text-lg sm:text-xl font-bold ${
                   ticker.sentiment.overall.includes('Bullish') ? 'text-green-400' :
                   ticker.sentiment.overall.includes('Bearish') ? 'text-red-400' :
                   'text-yellow-400'
                 }`}>{ticker.sentiment.overall}</div>
               </div>
             </div>
-          </div>
+          </article>
 
-          {/* Options Flow */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-orange-400 font-semibold mb-4 uppercase text-sm tracking-wider">Options Flow</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Call Volume</span>
-                <span className="text-green-400 font-semibold">{ticker.optionsFlow.callVolume}</span>
+          {/* Options Flow Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+              <h3 className="text-orange-400 font-semibold uppercase text-sm tracking-wider">Options Flow</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-xs font-medium">Call Volume</span>
+                  <span className="text-green-400 font-bold text-sm">{ticker.optionsFlow.callVolume}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Put Volume</span>
-                <span className="text-red-400 font-semibold">{ticker.optionsFlow.putVolume}</span>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-xs font-medium">Put Volume</span>
+                  <span className="text-red-400 font-bold text-sm">{ticker.optionsFlow.putVolume}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Put/Call Ratio</span>
-                <span className={`font-semibold ${
-                  ticker.optionsFlow.putCallRatio > 1 ? 'text-red-400' :
-                  ticker.optionsFlow.putCallRatio < 0.7 ? 'text-green-400' :
-                  'text-yellow-400'
-                }`}>{ticker.optionsFlow.putCallRatio.toFixed(2)}</span>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-xs font-medium">Put/Call Ratio</span>
+                  <span className={`font-bold text-sm ${
+                    ticker.optionsFlow.putCallRatio > 1 ? 'text-red-400' :
+                    ticker.optionsFlow.putCallRatio < 0.7 ? 'text-green-400' :
+                    'text-yellow-400'
+                  }`}>{ticker.optionsFlow.putCallRatio.toFixed(2)}</span>
+                </div>
               </div>
-              <div className="pt-3 mt-3 border-t border-gray-700">
+              <div className="pt-3 mt-3 border-t border-gray-700/50">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-500 text-sm">Unusual Activity</span>
-                  <div className={`px-3 py-1 rounded text-xs font-bold ${
+                  <span className="text-gray-400 text-xs font-medium">Unusual Activity</span>
+                  <div className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     ticker.optionsFlow.unusualActivity
-                      ? 'bg-yellow-500/20 text-yellow-400 animate-pulse'
-                      : 'bg-gray-800 text-gray-500'
+                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 animate-pulse'
+                      : 'bg-gray-800 text-gray-500 border border-gray-700'
                   }`}>
                     {ticker.optionsFlow.unusualActivity ? 'DETECTED' : 'NONE'}
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </article>
 
-          {/* Technical Indicators */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 className="text-indigo-400 font-semibold mb-4 uppercase text-sm tracking-wider">Technical Indicators</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">MACD</span>
-                <span className={`font-semibold ${
-                  ticker.marketConditions.macd.includes('Bullish') ? 'text-green-400' :
-                  ticker.marketConditions.macd.includes('Bearish') ? 'text-red-400' :
-                  'text-yellow-400'
-                }`}>{ticker.marketConditions.macd}</span>
+          {/* Technical Indicators Card */}
+          <article className="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 hover:border-gray-700 transition-colors">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
+              <h3 className="text-indigo-400 font-semibold uppercase text-sm tracking-wider">Technical Indicators</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-xs font-medium">MACD</span>
+                  <span className={`font-bold text-sm ${
+                    ticker.marketConditions.macd.includes('Bullish') ? 'text-green-400' :
+                    ticker.marketConditions.macd.includes('Bearish') ? 'text-red-400' :
+                    'text-yellow-400'
+                  }`}>{ticker.marketConditions.macd}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Bollinger Bands</span>
-                <span className="font-semibold text-white">{ticker.marketConditions.bollingerBands}</span>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between">
+                  <span className="text-gray-400 text-xs font-medium">Bollinger Bands</span>
+                  <span className="font-bold text-white text-sm">{ticker.marketConditions.bollingerBands}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">RSI Status</span>
-                <span className={`font-semibold ${
-                  ticker.marketConditions.rsi > 70 ? 'text-red-400' :
-                  ticker.marketConditions.rsi < 30 ? 'text-green-400' :
-                  'text-yellow-400'
-                }`}>
-                  {ticker.marketConditions.rsi > 70 ? 'Overbought' :
-                   ticker.marketConditions.rsi < 30 ? 'Oversold' :
-                   'Normal'}
-                </span>
+              <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-xs font-medium">RSI Status</span>
+                  <div className={`px-2 py-1 rounded text-xs font-bold ${
+                    ticker.marketConditions.rsi > 70 ? 'bg-red-500/20 text-red-400' :
+                    ticker.marketConditions.rsi < 30 ? 'bg-green-500/20 text-green-400' :
+                    'bg-yellow-500/20 text-yellow-400'
+                  }`}>
+                    {ticker.marketConditions.rsi > 70 ? 'Overbought' :
+                     ticker.marketConditions.rsi < 30 ? 'Oversold' :
+                     'Normal'}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
+          </article>
+        </section>
+      </main>
     </div>
   )
 }

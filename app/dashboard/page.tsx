@@ -35,7 +35,6 @@ interface TickerData {
 
 export default function Dashboard() {
   const router = useRouter()
-  const [isMobile, setIsMobile] = useState(false)
   const [tickers, setTickers] = useState<TickerData[]>([
     {
       symbol: 'SPY',
@@ -159,15 +158,6 @@ export default function Dashboard() {
   const [marketStatus, setMarketStatus] = useState<'Pre-Market' | 'Open' | 'Closed' | 'After-Hours'>('Open')
   const [timeRemaining, setTimeRemaining] = useState<Record<string, number>>({})
 
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
 
   useEffect(() => {
     // Initialize countdown timers
@@ -384,231 +374,123 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Conditional Grid Layout Based on Screen Size */}
-      <div className={`min-h-screen ${isMobile ? 'pt-20' : 'pt-12'}`}>
-        {isMobile ? (
-          // Mobile: 1x4 grid (vertical stack) with proper spacing
-          <div className="flex flex-col gap-2 p-2 h-[calc(100vh-5rem)]">
+      {/* Responsive Grid Layout Using CSS */}
+      <div className="min-h-screen pt-20 md:pt-12">
+        {/* Mobile: 1x4 grid (vertical stack), Desktop: 2x2 grid */}
+        <div className="flex flex-col gap-2 p-2 h-[calc(100vh-5rem)] md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-3rem)] md:p-0">
             {tickers.map((ticker) => (
               <div
                 key={ticker.symbol}
-                onClick={() => router.push(`/ticker/${ticker.symbol}`)}
-                className="relative cursor-pointer border border-gray-800 transition-all duration-300 hover:border-gray-600 bg-gray-900 overflow-hidden rounded-lg flex-1 min-h-[150px]"
+                onClick={() => {
+                  console.log('Mobile card clicked:', ticker.symbol)
+                  router.push(`/ticker/${ticker.symbol}`)
+                }}
+                className="relative cursor-pointer border border-gray-800 transition-all duration-300 hover:border-gray-600 bg-gray-900 overflow-hidden rounded-lg flex-1 min-h-[140px] md:rounded-none md:min-h-0"
               >
                 {/* Animated Background */}
                 <div className={`absolute inset-0 opacity-10 bg-gradient-to-br ${getSignalColor(ticker.signal)}`}></div>
-                <div className="relative h-full flex flex-col p-2 space-y-2">
-                  {/* Top Row: Symbol and Action */}
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-1 mb-1">
-                        <h2 className="text-lg font-bold text-white">{ticker.symbol}</h2>
-                        <div className={`px-1 py-0.5 rounded text-[10px] font-bold text-white ${getActionColor(ticker.action)}`}>
-                          {ticker.action}
-                        </div>
-                      </div>
-                      <div className="text-sm font-light text-gray-300">
-                        ${ticker.price.toFixed(2)}
-                      </div>
-                      <div className={`text-xs font-medium ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {ticker.change >= 0 ? '↑' : '↓'} {Math.abs(ticker.change).toFixed(2)} ({ticker.changePercent >= 0 ? '+' : ''}{ticker.changePercent.toFixed(2)}%)
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className={`text-sm font-bold ${getUrgencyColor(ticker.urgency)}`}>
-                        {ticker.urgency}
-                      </div>
-                      {timeRemaining[ticker.symbol] && timeRemaining[ticker.symbol] > 0 && (
-                        <div className="mt-2">
-                          <div className="text-[10px] text-gray-500">TIME LEFT</div>
-                          <div className="text-sm font-mono text-yellow-400">
-                            {formatTimer(timeRemaining[ticker.symbol])}
-                          </div>
-                        </div>
-                      )}
-                      <div className="mt-1 text-[10px] text-gray-500">
-                        {ticker.timeToAction}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Key Levels */}
-                  <div className="grid grid-cols-2 gap-1 text-xs mb-1">
-                    <div>
-                      <div className="text-gray-500 text-[10px]">TARGET</div>
-                      <div className="text-green-400 font-bold text-sm">${ticker.exitTarget.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 text-[10px]">SELL</div>
-                      <div className="text-yellow-400 font-bold text-sm">${ticker.sellPrice.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 text-[10px]">STOP</div>
-                      <div className="text-red-400 font-bold text-sm">${ticker.stopLoss.toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500 text-[10px]">TIME</div>
-                      <div className="text-cyan-400 font-bold text-xs">{ticker.estimatedTimeInTrade}</div>
-                    </div>
-                  </div>
-
-                  {/* Center Section - Main Signal */}
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className={`inline-block px-3 py-2 rounded-lg border-2 ${
-                        ticker.signal === 'strong_buy' ? 'border-green-400 shadow-green-400/50' :
-                        ticker.signal === 'buy' ? 'border-green-300 shadow-green-300/30' :
-                        ticker.signal === 'neutral' ? 'border-yellow-400 shadow-yellow-400/30' :
-                        ticker.signal === 'sell' ? 'border-red-300 shadow-red-300/30' :
-                        'border-red-400 shadow-red-400/50'
-                      } shadow-lg`}>
-                        <div className={`text-lg font-bold tracking-wider bg-gradient-to-r ${getSignalColor(ticker.signal)} bg-clip-text text-transparent`}>
-                          {ticker.recommendation}
-                        </div>
-                        <div className="mt-1 text-xs text-gray-400">
-                          {ticker.signal === 'strong_buy' ? '🔥 Maximum Opportunity' :
-                           ticker.signal === 'buy' ? '✓ Good Entry Point' :
-                           ticker.signal === 'neutral' ? '⏸ Wait for Confirmation' :
-                           ticker.signal === 'sell' ? '⚠️ Consider Exit' :
-                           '🚨 Exit Immediately'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Section - AI Confidence */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-500 text-xs">AI Confidence</span>
-                      <span className="text-white font-bold text-xs">{ticker.confidence}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-1000 bg-gradient-to-r ${getSignalColor(ticker.signal)}`}
-                        style={{ width: `${ticker.confidence}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          // Desktop: 2x2 grid
-          <div className="grid grid-cols-2 grid-rows-2 gap-0 h-screen">
-            {tickers.map((ticker) => (
-              <div
-                key={ticker.symbol}
-                onClick={() => router.push(`/ticker/${ticker.symbol}`)}
-                className="relative cursor-pointer border border-gray-800 transition-all duration-300 hover:border-gray-600 bg-gray-900 overflow-hidden"
-              >
-                {/* Animated Background */}
-                <div className={`absolute inset-0 opacity-10 bg-gradient-to-br ${getSignalColor(ticker.signal)}`}></div>
-                <div className="relative h-full flex flex-col justify-between p-6 lg:p-8">
-                  {/* Desktop content - same as mobile but with larger text sizes */}
-                  <div>
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="flex items-center gap-3 mb-2">
-                          <h2 className="text-4xl font-bold text-white">{ticker.symbol}</h2>
-                          <div className={`px-3 py-1 rounded-lg text-xs font-bold text-white ${getActionColor(ticker.action)}`}>
+                <div className="relative h-full flex flex-col p-2 md:p-3 overflow-hidden">
+                  {/* Top Section - Header */}
+                  <div className="flex-shrink-0">
+                    <div className="flex justify-between items-start mb-1 md:mb-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1 md:gap-2 mb-1">
+                          <h2 className="text-lg md:text-2xl font-bold text-white truncate">{ticker.symbol}</h2>
+                          <div className={`px-1 md:px-2 py-0.5 rounded text-[10px] md:text-xs font-bold text-white ${getActionColor(ticker.action)}`}>
                             {ticker.action}
                           </div>
                         </div>
-                        <div className="text-3xl font-light text-gray-300">
+                        <div className="text-sm md:text-xl font-light text-gray-300">
                           ${ticker.price.toFixed(2)}
                         </div>
-                        <div className={`text-lg font-medium mt-1 ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`text-xs md:text-sm font-medium ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {ticker.change >= 0 ? '↑' : '↓'} {Math.abs(ticker.change).toFixed(2)} ({ticker.changePercent >= 0 ? '+' : ''}{ticker.changePercent.toFixed(2)}%)
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className={`text-2xl font-bold ${getUrgencyColor(ticker.urgency)}`}>
+                      <div className="text-right flex-shrink-0">
+                        <div className={`text-sm md:text-base font-bold ${getUrgencyColor(ticker.urgency)}`}>
                           {ticker.urgency}
                         </div>
                         {timeRemaining[ticker.symbol] && timeRemaining[ticker.symbol] > 0 && (
-                          <div className="mt-2">
-                            <div className="text-xs text-gray-500">TIME LEFT</div>
-                            <div className="text-xl font-mono text-yellow-400">
+                          <div className="mt-1">
+                            <div className="text-[10px] md:text-xs text-gray-500">TIME LEFT</div>
+                            <div className="text-xs md:text-sm font-mono text-yellow-400">
                               {formatTimer(timeRemaining[ticker.symbol])}
                             </div>
                           </div>
                         )}
-                        <div className="mt-2 text-xs text-gray-500">
+                        <div className="mt-1 text-[10px] md:text-xs text-gray-500 truncate">
                           {ticker.timeToAction}
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                      <div>
-                        <div className="text-gray-500 text-xs">TARGET</div>
-                        <div className="text-green-400 font-bold text-lg">${ticker.exitTarget.toFixed(2)}</div>
+                  {/* Key Levels Section */}
+                  <div className="flex-shrink-0 mb-1 md:mb-2">
+                    <div className="flex justify-between">
+                      <div className="space-y-0.5 md:space-y-1 text-xs">
+                        <div>
+                          <div className="text-gray-500 text-[10px] md:text-xs">SELL</div>
+                          <div className="text-yellow-400 font-bold text-xs md:text-sm">${ticker.sellPrice.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 text-[10px] md:text-xs">TARGET</div>
+                          <div className="text-green-400 font-bold text-xs md:text-sm">${ticker.exitTarget.toFixed(2)}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 text-[10px] md:text-xs">STOP</div>
+                          <div className="text-red-400 font-bold text-xs md:text-sm">${ticker.stopLoss.toFixed(2)}</div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-gray-500 text-xs">SELL</div>
-                        <div className="text-yellow-400 font-bold text-lg">${ticker.sellPrice.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 text-xs">STOP</div>
-                        <div className="text-red-400 font-bold">${ticker.stopLoss.toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div className="text-gray-500 text-xs">TIME</div>
-                        <div className="text-cyan-400 font-bold">{ticker.estimatedTimeInTrade}</div>
+                      <div className="text-right">
+                        <div className="text-gray-500 text-[10px] md:text-xs">TIME</div>
+                        <div className="text-cyan-400 font-bold text-[10px] md:text-xs">{ticker.estimatedTimeInTrade}</div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex-1 flex items-center justify-center">
+                  {/* Center Section - Signal (Absolutely Positioned) */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="text-center">
-                      <div className={`inline-block px-8 py-6 rounded-xl border-2 ${
-                        ticker.signal === 'strong_buy' ? 'border-green-400 shadow-green-400/50' :
-                        ticker.signal === 'buy' ? 'border-green-300 shadow-green-300/30' :
-                        ticker.signal === 'neutral' ? 'border-yellow-400 shadow-yellow-400/30' :
-                        ticker.signal === 'sell' ? 'border-red-300 shadow-red-300/30' :
-                        'border-red-400 shadow-red-400/50'
-                      } shadow-lg`}>
-                        <div className={`text-3xl font-bold tracking-wider bg-gradient-to-r ${getSignalColor(ticker.signal)} bg-clip-text text-transparent`}>
+                      <div className={`inline-block px-3 md:px-6 py-2 md:py-4 rounded md:rounded-lg border md:border-2 ${
+                        ticker.signal === 'strong_buy' ? 'border-green-400 md:shadow-green-400/50' :
+                        ticker.signal === 'buy' ? 'border-green-300 md:shadow-green-300/30' :
+                        ticker.signal === 'neutral' ? 'border-yellow-400 md:shadow-yellow-400/30' :
+                        ticker.signal === 'sell' ? 'border-red-300 md:shadow-red-300/30' :
+                        'border-red-400 md:shadow-red-400/50'
+                      } md:shadow-lg bg-gray-900/90 backdrop-blur-sm`}>
+                        <div className={`text-lg md:text-2xl font-bold md:tracking-wider bg-gradient-to-r ${getSignalColor(ticker.signal)} bg-clip-text text-transparent`}>
                           {ticker.recommendation}
                         </div>
-                        <div className="mt-2 text-sm text-gray-400">
-                          {ticker.signal === 'strong_buy' ? '🔥 Maximum Opportunity' :
-                           ticker.signal === 'buy' ? '✓ Good Entry Point' :
-                           ticker.signal === 'neutral' ? '⏸ Wait for Confirmation' :
+                        <div className="text-[10px] md:text-xs md:mt-1 text-gray-400">
+                          {ticker.signal === 'strong_buy' ? '🔥 Max Opportunity' :
+                           ticker.signal === 'buy' ? '✓ Good Entry' :
+                           ticker.signal === 'neutral' ? '⏸ Wait' :
                            ticker.signal === 'sell' ? '⚠️ Consider Exit' :
-                           '🚨 Exit Immediately'}
+                           '🚨 Exit Now'}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-500 text-sm">AI Confidence</span>
-                        <span className="text-white font-bold">{ticker.confidence}%</span>
-                      </div>
-                      <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-1000 bg-gradient-to-r ${getSignalColor(ticker.signal)}`}
-                          style={{ width: `${ticker.confidence}%` }}
-                        />
-                      </div>
-                    </div>
+                  {/* Bottom Right Corner - AI Confidence */}
+                  <div className="absolute bottom-2 md:bottom-3 right-2 md:right-3 text-right">
+                    <div className="text-white font-bold text-sm md:text-lg">{ticker.confidence}%</div>
+                    <div className="text-gray-500 text-[10px] md:text-xs">AI Confidence</div>
                   </div>
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none flex items-end">
-                    <div className="p-8 w-full">
-                      <div className="text-white text-lg font-medium">View Full Analysis & Execute Trade →</div>
-                      <div className="text-gray-400 text-sm mt-1">Detailed charts, order execution, and risk management</div>
+                  {/* Desktop Hover Overlay */}
+                  <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none md:flex items-end">
+                    <div className="p-4 w-full">
+                      <div className="text-white text-base font-medium">View Full Analysis →</div>
+                      <div className="text-gray-400 text-xs mt-1">Charts, execution, risk management</div>
                     </div>
                   </div>
                 </div>
               </div>
             ))}
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
