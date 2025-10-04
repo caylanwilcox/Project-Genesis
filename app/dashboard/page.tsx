@@ -375,7 +375,7 @@ export default function Dashboard() {
       </div>
 
       {/* Responsive Grid Layout Using CSS */}
-      <div className="min-h-screen pt-20 md:pt-12">
+      <div className="min-h-screen pt-14 md:pt-12">
         {/* Mobile: 1x4 grid (vertical stack), Desktop: 2x2 grid */}
         <div className="flex flex-col gap-2 p-2 h-[calc(100vh-5rem)] md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-3rem)] md:p-0">
             {tickers.map((ticker) => (
