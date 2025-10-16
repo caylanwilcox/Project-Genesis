@@ -10,6 +10,7 @@ interface UsePolygonDataOptions {
   limit?: number;
   autoRefresh?: boolean;
   refreshInterval?: number; // in milliseconds
+  displayTimeframe?: string; // Display timeframe like 'YTD', '1Y', '5Y' for special date handling
 }
 
 interface UsePolygonDataResult {
@@ -28,6 +29,7 @@ export function usePolygonData({
   limit = 100,
   autoRefresh = false,
   refreshInterval = 60000, // 1 minute default
+  displayTimeframe,
 }: UsePolygonDataOptions): UsePolygonDataResult {
   const [data, setData] = useState<NormalizedChartData[]>([]);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
@@ -49,7 +51,7 @@ export function usePolygonData({
       }
 
       // Fetch aggregate data for chart
-      const aggregates = await polygonService.getAggregates(ticker, timeframe, limit);
+      const aggregates = await polygonService.getAggregates(ticker, timeframe, limit, displayTimeframe);
 
       // Set the data (service ensures it's not empty)
       setData(aggregates);
@@ -98,7 +100,7 @@ export function usePolygonData({
     } finally {
       setIsLoading(false);
     }
-  }, [ticker, timeframe, limit]);
+  }, [ticker, timeframe, limit, displayTimeframe]);
 
   // Initial fetch
   useEffect(() => {

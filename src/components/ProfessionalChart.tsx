@@ -648,7 +648,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       const map: Record<string, string> = {
         '1D': '15m',    // 1 day view with 15min bars
         '5D': '1h',     // 5 day view with 1hr bars
-        '1M': '4h',     // 1 month view with 4hr bars
+        '1M': '1h',     // 1 month view with 1hr bars for higher fidelity
         '3M': '1d',     // 3 month view with daily bars
         '6M': '1d',     // 6 month view with daily bars
         'YTD': '1d',    // Year to date with daily bars
@@ -661,7 +661,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       const intervalMap: Record<string, string> = {
         '1D': '15 min',
         '5D': '1 hour',
-        '1M': '1 hour', // Note: backend uses 4h, but showing closest available option
+        '1M': '1 hour',
         '3M': '1 day',
         '6M': '1 day',
         'YTD': '1 day',

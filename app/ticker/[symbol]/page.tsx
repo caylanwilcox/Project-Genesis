@@ -41,7 +41,11 @@ export default function TickerPage() {
     if (tf === '5m') return 390 // 5 days worth
     if (tf === '15m') return 390 // Multiple days
     if (tf === '30m') return 390
-    if (tf === '1h') return 390
+    if (tf === '1h') {
+      // If showing 1M display range, fetch ~22 trading days of 1h bars
+      if (displayTf === '1M') return 22 * 6.5 // ~143 bars
+      return 390
+    }
     if (tf === '4h') return 390
 
     // For daily and longer timeframes, fetch based on display range
@@ -73,6 +77,7 @@ export default function TickerPage() {
     limit: getBarLimit(timeframe, displayTimeframe),
     autoRefresh: true,
     refreshInterval: timeframe === '1m' ? 10000 : 60000, // faster on 1m
+    displayTimeframe, // Pass display timeframe for accurate date range calculation
   })
 
   // Live price from snapshot (paid plan) every 5s; falls back gracefully if unavailable

@@ -173,12 +173,14 @@ class PolygonService {
    * @param ticker Stock symbol (e.g., 'AAPL', 'SPY')
    * @param timeframe Timeframe string (e.g., '1h', '1d')
    * @param limit Number of bars to fetch (default: 100)
+   * @param displayTimeframe Display timeframe for special date handling (e.g., 'YTD', '1Y', '5Y')
    * @returns Normalized chart data
    */
   async getAggregates(
     ticker: string,
     timeframe: Timeframe = '1h',
-    limit: number = 100
+    limit: number = 100,
+    displayTimeframe?: string
   ): Promise<NormalizedChartData[]> {
     const cacheKey = `aggs_${ticker}_${timeframe}_${limit}`;
 
@@ -194,7 +196,9 @@ class PolygonService {
         // For daily+ timeframes, we can use simpler calculation
         const now = Date.now();
         const toDate = new Date(now);
-        const fromDate = this.calculateHistoricalFromDate(toDate, timeframe, limit);
+
+        // Use special date calculation for specific display timeframes
+        const fromDate = this.calculateDateRange(toDate, timeframe, limit, displayTimeframe);
 
         console.log(`[PolygonService] Current timestamp: ${now}, toDate: ${toDate.toISOString()}`);
         console.log(`[PolygonService] Requesting ${limit} bars of ${timeframe} data for ${ticker} from ${this.formatDate(fromDate)} to ${this.formatDate(toDate)}`);
@@ -347,6 +351,52 @@ class PolygonService {
       close: bar.c,
       volume: bar.v,
     }));
+  }
+
+  /**
+   * Calculate date range for specific display timeframes (YTD, 1Y, 5Y, All)
+   * @param toDate End date (usually now)
+   * @param timeframe Data timeframe (1d, 1w, etc.)
+   * @param limit Number of bars
+   * @param displayTimeframe Display timeframe (YTD, 1Y, 5Y, All, etc.)
+   * @returns From date
+   */
+  private calculateDateRange(toDate: Date, timeframe: Timeframe, limit: number, displayTimeframe?: string): Date {
+    const date = new Date(toDate.getTime());
+
+    // Handle special display timeframes
+    if (displayTimeframe) {
+      switch (displayTimeframe) {
+        case 'YTD':
+          // Year to date - January 1st of current year
+          date.setMonth(0); // January
+          date.setDate(1);
+          date.setHours(0, 0, 0, 0);
+          console.log(`[PolygonService] YTD: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          return date;
+
+        case '1Y':
+          // Exactly 1 year back
+          date.setFullYear(date.getFullYear() - 1);
+          console.log(`[PolygonService] 1Y: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          return date;
+
+        case '5Y':
+          // Exactly 5 years back
+          date.setFullYear(date.getFullYear() - 5);
+          console.log(`[PolygonService] 5Y: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          return date;
+
+        case 'All':
+          // Go back 20 years (or as far as data exists)
+          date.setFullYear(date.getFullYear() - 20);
+          console.log(`[PolygonService] All: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          return date;
+      }
+    }
+
+    // Default: use bar-count-based calculation
+    return this.calculateHistoricalFromDate(toDate, timeframe, limit);
   }
 
   /**

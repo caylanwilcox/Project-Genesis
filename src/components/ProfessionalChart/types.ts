@@ -58,7 +58,7 @@ export const TIMEFRAME_CONFIGS = {
   dataTimeframeMap: {
     '1D': '15m',
     '5D': '1h',
-    '1M': '4h',
+    '1M': '1h',
     '3M': '1d',
     '6M': '1d',
     'YTD': '1d',
