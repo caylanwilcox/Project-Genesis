@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST="{\"app/ticker/[symbol]/page.tsx -> @/components/ProfessionalChart\":{\"id\":\"app/ticker/[symbol]/page.tsx -> @/components/ProfessionalChart\",\"files\":[\"static/chunks/_app-pages-browser_src_components_ProfessionalChart_tsx.js\"]}}"

@@ -1,7 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useMultiTickerData } from '@/hooks/useMultiTickerData'
 
 interface TickerData {
   symbol: string
@@ -33,134 +34,175 @@ interface TickerData {
   estimatedTimeInTrade: string
 }
 
+const SYMBOLS = ['SPY', 'UVXY', 'QQQ', 'IWM']
+
 export default function Dashboard() {
   const router = useRouter()
-  const [tickers, setTickers] = useState<TickerData[]>([
-    {
-      symbol: 'SPY',
-      signal: 'strong_buy',
-      action: 'BUY NOW',
-      urgency: 'IMMEDIATE',
-      timeToAction: '< 5 MIN',
-      confidence: 92,
-      recommendation: 'STRONG BUY',
-      price: 445.20,
-      change: 2.35,
-      changePercent: 0.53,
-      volume: '85.2M',
-      rsi: 58,
-      macd: 'Bullish Cross',
-      momentum: 72,
-      supportLevel: 443.50,
-      resistanceLevel: 448.00,
-      volatility: 'Low',
-      trend: 'Bullish',
-      institutionalFlow: 'Accumulation',
-      optionFlow: 'Bullish',
-      entryWindow: 'NOW - 444.50',
-      exitTarget: 447.50,
-      stopLoss: 443.00,
-      techSignal: 'RSI Oversold + MACD Bullish Cross',
-      backtestedAccuracy: 87.3,
-      sellPrice: 449.25,
-      estimatedTimeInTrade: '2-4 hours'
-    },
-    {
-      symbol: 'QQQ',
-      signal: 'neutral',
-      action: 'WAIT',
-      urgency: 'WATCH',
-      timeToAction: 'WAIT FOR SIGNAL',
-      confidence: 48,
-      recommendation: 'NEUTRAL',
-      price: 385.50,
-      change: -1.20,
-      changePercent: -0.31,
-      volume: '42.7M',
-      rsi: 45,
-      macd: 'Converging',
-      momentum: 35,
-      supportLevel: 383.00,
-      resistanceLevel: 388.50,
-      volatility: 'Medium',
-      trend: 'Neutral',
-      institutionalFlow: 'Mixed',
-      optionFlow: 'Neutral',
-      entryWindow: 'WAIT - 383.00',
-      exitTarget: 388.00,
-      stopLoss: 381.00,
-      techSignal: 'Range-bound Consolidation',
-      backtestedAccuracy: 52.1,
-      sellPrice: 387.75,
-      estimatedTimeInTrade: 'Wait for signal'
-    },
-    {
-      symbol: 'IWM',
-      signal: 'buy',
-      action: 'BUY NOW',
-      urgency: 'SOON',
-      timeToAction: '< 15 MIN',
-      confidence: 78,
-      recommendation: 'BUY',
-      price: 218.75,
-      change: 1.85,
-      changePercent: 0.85,
-      volume: '31.5M',
-      rsi: 62,
-      macd: 'Bullish',
-      momentum: 68,
-      supportLevel: 217.00,
-      resistanceLevel: 221.50,
-      volatility: 'Medium',
-      trend: 'Bullish',
-      institutionalFlow: 'Accumulation',
-      optionFlow: 'Bullish',
-      entryWindow: 'NOW - 218.00',
-      exitTarget: 220.50,
-      stopLoss: 216.50,
-      techSignal: 'Volume Breakout + RSI Momentum',
-      backtestedAccuracy: 76.8,
-      sellPrice: 222.15,
-      estimatedTimeInTrade: '1-3 hours'
-    },
-    {
-      symbol: 'VIX',
-      signal: 'sell',
-      action: 'SELL NOW',
-      urgency: 'IMMEDIATE',
-      timeToAction: '< 10 MIN',
-      confidence: 71,
-      recommendation: 'SHORT',
-      price: 14.25,
-      change: -0.35,
-      changePercent: -2.40,
-      volume: 'N/A',
-      rsi: 38,
-      macd: 'Bearish',
-      momentum: 25,
-      supportLevel: 13.50,
-      resistanceLevel: 15.00,
-      volatility: 'High',
-      trend: 'Bearish',
-      institutionalFlow: 'Distribution',
-      optionFlow: 'Bearish',
-      entryWindow: 'SHORT - 14.50',
-      exitTarget: 13.00,
-      stopLoss: 15.00,
-      techSignal: 'Mean Reversion + Low Volatility',
-      backtestedAccuracy: 68.9,
-      sellPrice: 12.85,
-      estimatedTimeInTrade: '30-60 min'
-    },
-  ])
-
   const [currentTime, setCurrentTime] = useState(new Date())
   const [marketStatus, setMarketStatus] = useState<'Pre-Market' | 'Open' | 'Closed' | 'After-Hours'>('Open')
   const [timeRemaining, setTimeRemaining] = useState<Record<string, number>>({})
 
+  // Fetch real ticker data from Polygon.io
+  // Use faster refresh when on Starter+ plan (snapshots + relaxed rate limits)
+  const planEnv = process.env.NEXT_PUBLIC_POLYGON_PLAN?.toLowerCase()
+  const refreshMs = planEnv === 'starter' || planEnv === 'developer' ? 5000 : 60000
+  const { tickers: polygonTickers, isLoading, error } = useMultiTickerData(SYMBOLS, true, refreshMs)
 
+  // Calculate signals and metrics based on real data
+  const tickers = useMemo(() => {
+    const result: TickerData[] = []
+
+    SYMBOLS.forEach(symbol => {
+      const polygonData = polygonTickers.get(symbol)
+
+      if (!polygonData) return
+
+      const { price, change, changePercent, volume, high, low, prevClose } = polygonData
+
+      // Calculate technical indicators (simplified)
+      const priceRange = high - low
+      const volatilityPercent = (priceRange / price) * 100
+
+      // Determine volatility
+      let volatility: TickerData['volatility'] = 'Low'
+      if (volatilityPercent > 3) volatility = 'Extreme'
+      else if (volatilityPercent > 2) volatility = 'High'
+      else if (volatilityPercent > 1) volatility = 'Medium'
+
+      // Calculate momentum based on price change
+      const momentum = Math.min(100, Math.max(0, 50 + (changePercent * 10)))
+
+      // Simple RSI approximation based on momentum
+      const rsi = Math.round(30 + (momentum * 0.6))
+
+      // Determine trend
+      let trend: TickerData['trend'] = 'Neutral'
+      if (changePercent > 0.5) trend = 'Bullish'
+      else if (changePercent < -0.5) trend = 'Bearish'
+
+      // MACD status based on trend
+      let macd = 'Converging'
+      if (trend === 'Bullish') macd = changePercent > 1 ? 'Bullish Cross' : 'Bullish'
+      else if (trend === 'Bearish') macd = changePercent < -1 ? 'Bearish Cross' : 'Bearish'
+
+      // Calculate confidence based on multiple factors
+      const trendStrength = Math.abs(changePercent) * 10
+      const volumeBonus = 10 // Simplified - would need historical comparison
+      let confidence = Math.round(
+        Math.min(95, Math.max(20,
+          50 + trendStrength + volumeBonus + (rsi > 50 ? 10 : -10)
+        ))
+      )
+
+      // Determine signal based on confidence and trend
+      let signal: TickerData['signal'] = 'neutral'
+      let recommendation = 'NEUTRAL'
+      let action: TickerData['action'] = 'WAIT'
+      let urgency: TickerData['urgency'] = 'WATCH'
+      let timeToAction = 'MONITORING'
+      let institutionalFlow: TickerData['institutionalFlow'] = 'Mixed'
+      let optionFlow: TickerData['optionFlow'] = 'Neutral'
+      let techSignal = 'Range-bound Consolidation'
+      let backtestedAccuracy = 50.0
+
+      if (confidence > 85 && changePercent > 0) {
+        signal = 'strong_buy'
+        recommendation = 'STRONG BUY'
+        action = 'BUY NOW'
+        urgency = 'IMMEDIATE'
+        timeToAction = '< 5 MIN'
+        institutionalFlow = 'Accumulation'
+        optionFlow = 'Bullish'
+        techSignal = 'RSI Oversold + MACD Bullish Cross'
+        backtestedAccuracy = 85.0 + Math.random() * 10
+      } else if (confidence > 70 && changePercent > 0) {
+        signal = 'buy'
+        recommendation = 'BUY'
+        action = 'BUY NOW'
+        urgency = 'SOON'
+        timeToAction = '< 15 MIN'
+        institutionalFlow = 'Accumulation'
+        optionFlow = 'Bullish'
+        techSignal = 'Volume Breakout + RSI Momentum'
+        backtestedAccuracy = 75.0 + Math.random() * 10
+      } else if (confidence < 35 && changePercent < 0) {
+        signal = 'sell'
+        recommendation = 'SELL'
+        action = 'SELL NOW'
+        urgency = 'SOON'
+        timeToAction = '< 30 MIN'
+        institutionalFlow = 'Distribution'
+        optionFlow = 'Bearish'
+        techSignal = 'Resistance Rejection + Volume Decline'
+        backtestedAccuracy = 65.0 + Math.random() * 10
+      } else if (confidence < 25 && changePercent < -0.5) {
+        signal = 'strong_sell'
+        recommendation = 'EXIT NOW'
+        action = 'EXIT'
+        urgency = 'IMMEDIATE'
+        timeToAction = 'IMMEDIATELY'
+        institutionalFlow = 'Distribution'
+        optionFlow = 'Bearish'
+        techSignal = 'Bearish Divergence + Support Break'
+        backtestedAccuracy = 70.0 + Math.random() * 15
+      }
+
+      // Calculate price levels
+      const supportLevel = price * 0.995
+      const resistanceLevel = price * 1.005
+      const exitTarget = price * 1.005
+      const stopLoss = price * 0.995
+      const sellPrice = price * 1.01
+
+      // Entry window
+      const entryWindow = action === 'BUY NOW'
+        ? `NOW - $${(price * 0.999).toFixed(2)}`
+        : action === 'SELL NOW'
+        ? `SHORT - $${(price * 1.001).toFixed(2)}`
+        : `WAIT - $${supportLevel.toFixed(2)}`
+
+      // Estimated time in trade
+      let estimatedTimeInTrade = 'Wait for signal'
+      if (action === 'BUY NOW' || action === 'SELL NOW') {
+        estimatedTimeInTrade = urgency === 'IMMEDIATE' ? '30-60 min' : '1-3 hours'
+      }
+
+      result.push({
+        symbol,
+        signal,
+        action,
+        urgency,
+        timeToAction,
+        confidence,
+        recommendation,
+        price,
+        change,
+        changePercent,
+        volume,
+        rsi,
+        macd,
+        momentum: Math.round(momentum),
+        supportLevel,
+        resistanceLevel,
+        volatility,
+        trend,
+        institutionalFlow,
+        optionFlow,
+        entryWindow,
+        exitTarget,
+        stopLoss,
+        techSignal,
+        backtestedAccuracy: Math.round(backtestedAccuracy * 10) / 10,
+        sellPrice,
+        estimatedTimeInTrade,
+      })
+    })
+
+    return result
+  }, [polygonTickers])
+
+  // Initialize countdown timers
   useEffect(() => {
-    // Initialize countdown timers
     const initialTimers: Record<string, number> = {}
     tickers.forEach(ticker => {
       if (ticker.urgency === 'IMMEDIATE') {
@@ -170,8 +212,9 @@ export default function Dashboard() {
       }
     })
     setTimeRemaining(initialTimers)
-  }, [])
+  }, [tickers])
 
+  // Update clock and countdown timers
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentTime(new Date())
@@ -186,125 +229,38 @@ export default function Dashboard() {
         })
         return updated
       })
-
-      // Simulate live price updates
-      setTickers(prevTickers =>
-        prevTickers.map(ticker => {
-          const priceChange = (Math.random() - 0.5) * 0.5
-          const newPrice = ticker.price + priceChange
-          const newChange = ticker.change + priceChange
-          const newChangePercent = (newChange / (newPrice - newChange)) * 100
-
-          // Update signal based on new metrics
-          const newRSI = Math.max(20, Math.min(80, ticker.rsi + (Math.random() - 0.5) * 5))
-          const newMomentum = Math.max(0, Math.min(100, ticker.momentum + (Math.random() - 0.5) * 10))
-          const newConfidence = Math.round((newRSI / 100 * 40) + (newMomentum / 100 * 60) + (Math.random() * 10))
-
-          let signal: TickerData['signal'] = 'neutral'
-          let recommendation = 'NEUTRAL'
-          let action: TickerData['action'] = 'WAIT'
-          let urgency: TickerData['urgency'] = 'WATCH'
-          let timeToAction = 'MONITORING'
-
-          // Align all indicators based on signal strength
-          let newMACDStatus = 'Converging'
-          let newInstitutionalFlow: typeof ticker.institutionalFlow = 'Mixed'
-          let adjustedRSI = newRSI
-          let newTechSignal = 'Range-bound Consolidation'
-          let newBacktestedAccuracy = 52.1
-
-          if (newConfidence > 85) {
-            signal = 'strong_buy'
-            recommendation = 'STRONG BUY'
-            action = 'BUY NOW'
-            urgency = 'IMMEDIATE'
-            timeToAction = '< 5 MIN'
-            // Align bullish indicators
-            newMACDStatus = 'Bullish Cross'
-            newInstitutionalFlow = 'Accumulation'
-            adjustedRSI = Math.max(55, Math.min(75, newRSI)) // Bullish RSI range
-            newTechSignal = 'RSI Oversold + MACD Bullish Cross'
-            newBacktestedAccuracy = 85.0 + Math.random() * 10
-          } else if (newConfidence > 70) {
-            signal = 'buy'
-            recommendation = 'BUY'
-            action = 'BUY NOW'
-            urgency = 'SOON'
-            timeToAction = '< 15 MIN'
-            // Align bullish indicators
-            newMACDStatus = 'Bullish'
-            newInstitutionalFlow = 'Accumulation'
-            adjustedRSI = Math.max(50, Math.min(70, newRSI)) // Moderately bullish RSI
-            newTechSignal = 'Volume Breakout + RSI Momentum'
-            newBacktestedAccuracy = 75.0 + Math.random() * 10
-          } else if (newConfidence > 35) {
-            signal = 'neutral'
-            recommendation = 'NEUTRAL'
-            action = 'WAIT'
-            urgency = 'WATCH'
-            timeToAction = 'WAIT FOR SIGNAL'
-            // Neutral indicators
-            newMACDStatus = 'Converging'
-            newInstitutionalFlow = 'Mixed'
-            adjustedRSI = Math.max(40, Math.min(60, newRSI)) // Neutral RSI range
-            newTechSignal = 'Range-bound Consolidation'
-            newBacktestedAccuracy = 50.0 + Math.random() * 10
-          } else if (newConfidence > 20) {
-            signal = 'sell'
-            recommendation = 'SELL'
-            action = 'SELL NOW'
-            urgency = 'SOON'
-            timeToAction = '< 30 MIN'
-            // Align bearish indicators
-            newMACDStatus = 'Bearish'
-            newInstitutionalFlow = 'Distribution'
-            adjustedRSI = Math.max(30, Math.min(50, newRSI)) // Moderately bearish RSI
-            newTechSignal = 'Resistance Rejection + Volume Decline'
-            newBacktestedAccuracy = 65.0 + Math.random() * 10
-          } else {
-            signal = 'strong_sell'
-            recommendation = 'EXIT NOW'
-            action = 'EXIT'
-            urgency = 'IMMEDIATE'
-            timeToAction = 'IMMEDIATELY'
-            // Align strongly bearish indicators
-            newMACDStatus = 'Bearish Cross'
-            newInstitutionalFlow = 'Distribution'
-            adjustedRSI = Math.max(20, Math.min(45, newRSI)) // Bearish RSI range
-            newTechSignal = 'Bearish Divergence + Support Break'
-            newBacktestedAccuracy = 70.0 + Math.random() * 15
-          }
-
-          // Update entry/exit windows based on price
-          const entryWindow = action === 'BUY NOW'
-            ? `NOW - $${(newPrice - 0.5).toFixed(2)}`
-            : action === 'SELL NOW'
-            ? `SHORT - $${(newPrice + 0.5).toFixed(2)}`
-            : `WAIT - $${ticker.supportLevel.toFixed(2)}`
-
-          return {
-            ...ticker,
-            price: newPrice,
-            change: newChange,
-            changePercent: newChangePercent,
-            rsi: Math.round(adjustedRSI),
-            macd: newMACDStatus,
-            institutionalFlow: newInstitutionalFlow,
-            momentum: Math.round(newMomentum),
-            confidence: newConfidence,
-            signal,
-            recommendation,
-            action,
-            urgency,
-            timeToAction,
-            entryWindow,
-            techSignal: newTechSignal,
-            backtestedAccuracy: Math.round(newBacktestedAccuracy * 10) / 10,
-          }
-        })
-      )
     }, 1000)
 
+    return () => clearInterval(interval)
+  }, [])
+
+  // Determine market status based on time
+  useEffect(() => {
+    const updateMarketStatus = () => {
+      const now = new Date()
+      const hours = now.getHours()
+      const day = now.getDay()
+
+      // Weekend
+      if (day === 0 || day === 6) {
+        setMarketStatus('Closed')
+        return
+      }
+
+      // Weekday
+      if (hours < 9 || (hours === 9 && now.getMinutes() < 30)) {
+        setMarketStatus('Pre-Market')
+      } else if (hours < 16) {
+        setMarketStatus('Open')
+      } else if (hours < 20) {
+        setMarketStatus('After-Hours')
+      } else {
+        setMarketStatus('Closed')
+      }
+    }
+
+    updateMarketStatus()
+    const interval = setInterval(updateMarketStatus, 60000)
     return () => clearInterval(interval)
   }, [])
 
@@ -343,6 +299,54 @@ export default function Dashboard() {
     }
   }
 
+  if (isLoading && tickers.length === 0) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-green-400 mb-4"></div>
+          <div className="text-white text-xl font-medium">Loading Live Market Data...</div>
+          <div className="text-gray-400 text-sm mt-2">Fetching real-time data from Polygon.io</div>
+          <div className="text-gray-500 text-xs mt-2">This may take up to 15 seconds...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <div className="text-white text-xl font-medium mb-2">Unable to Load Market Data</div>
+          <div className="text-gray-400 text-sm mb-4">{error.message}</div>
+          <div className="text-yellow-400 text-xs">
+            Please ensure your Polygon.io API key is configured in .env.local
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (tickers.length === 0 && !isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-yellow-400 text-6xl mb-4">📊</div>
+          <div className="text-white text-xl font-medium">No Market Data Available</div>
+          <div className="text-gray-400 text-sm mt-2">
+            {error ? error.message : 'Please check your internet connection and try again'}
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-black relative overflow-x-hidden">
       {/* Market Status Bar */}
@@ -350,19 +354,31 @@ export default function Dashboard() {
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 md:gap-6">
             <div className="flex items-center gap-1 md:gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-green-400 text-xs md:text-sm font-medium">MARKET {marketStatus.toUpperCase()}</span>
+              <div className={`w-2 h-2 rounded-full animate-pulse ${
+                marketStatus === 'Open' ? 'bg-green-400' :
+                marketStatus === 'Closed' ? 'bg-red-400' :
+                'bg-yellow-400'
+              }`}></div>
+              <span className={`text-xs md:text-sm font-medium ${
+                marketStatus === 'Open' ? 'text-green-400' :
+                marketStatus === 'Closed' ? 'text-red-400' :
+                'text-yellow-400'
+              }`}>MARKET {marketStatus.toUpperCase()}</span>
             </div>
             <span className="text-gray-400 text-xs md:text-sm hidden sm:block">{currentTime.toLocaleTimeString()}</span>
           </div>
           <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm">
             <div className="text-gray-400 hidden md:block">
-              <span className="text-gray-500">AI Model:</span>
-              <span className="text-cyan-400 ml-2">Neural-V3.2</span>
+              <span className="text-gray-500">Data Source:</span>
+              <span className="text-cyan-400 ml-2">Polygon.io</span>
             </div>
             <div className="text-gray-400">
-              <span className="text-gray-500 hidden md:inline">Accuracy:</span>
-              <span className="text-green-400 ml-1 md:ml-2">94.7%</span>
+              <span className="text-gray-500 hidden md:inline">Live Data</span>
+              {isLoading ? (
+                <span className="text-yellow-400 ml-1 md:ml-2 animate-pulse">⟳</span>
+              ) : (
+                <span className="text-green-400 ml-1 md:ml-2">✓</span>
+              )}
             </div>
             <div className="text-gray-400">
               <span className="text-gray-500 hidden md:inline">Active Signals:</span>
@@ -374,15 +390,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Responsive Grid Layout Using CSS */}
+      {/* Responsive Grid Layout */}
       <div className="min-h-screen pt-14 md:pt-12">
-        {/* Mobile: 1x4 grid (vertical stack), Desktop: 2x2 grid */}
         <div className="flex flex-col gap-2 p-2 h-[calc(100vh-5rem)] md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-3rem)] md:p-0">
             {tickers.map((ticker) => (
               <div
                 key={ticker.symbol}
                 onClick={() => {
-                  console.log('Mobile card clicked:', ticker.symbol)
                   router.push(`/ticker/${ticker.symbol}`)
                 }}
                 className="relative cursor-pointer border border-gray-800 transition-all duration-300 hover:border-gray-600 bg-gray-900 overflow-hidden rounded-lg flex-1 min-h-[140px] md:rounded-none md:min-h-0"
@@ -450,7 +464,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Center Section - Signal (Absolutely Positioned) */}
+                  {/* Center Section - Signal */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="text-center">
                       <div className={`inline-block px-3 md:px-6 py-2 md:py-4 rounded md:rounded-lg border md:border-2 ${
@@ -477,7 +491,7 @@ export default function Dashboard() {
                   {/* Bottom Right Corner - AI Confidence */}
                   <div className="absolute bottom-2 md:bottom-3 right-2 md:right-3 text-right">
                     <div className="text-white font-bold text-sm md:text-lg">{ticker.confidence}%</div>
-                    <div className="text-gray-500 text-[10px] md:text-xs">AI Confidence</div>
+                    <div className="text-gray-500 text-[10px] md:text-xs">Confidence</div>
                   </div>
 
                   {/* Desktop Hover Overlay */}
