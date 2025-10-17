@@ -1,8 +1,9 @@
 /* Trading Grid Layout Styles - No External Margins */
 .container {
-  height: 100vh;
+  min-height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   margin: 0;
   padding: 0;
   position: relative;
@@ -22,7 +23,7 @@
   gap: 0;
   padding: 0;
   margin: 0;
-  height: 100vh;
+  min-height: 100vh;
   width: 100vw;
   box-sizing: border-box;
 }
@@ -44,17 +45,17 @@
   min-height: 0;
   width: 100%;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   margin: 0;
   padding: 0;
 }
 
 /* Mobile grid items - equal height distribution */
 .mobileGrid .gridItem {
-  flex: 1;
-  height: 25vh; /* Each item takes exactly 25% of viewport height */
-  min-height: 25vh;
-  max-height: 25vh;
+  flex: 0 1 auto; /* allow content to define height */
+  min-height: auto;
+  height: auto;
+  max-height: none;
 }
 
 /* Desktop grid items - perfect squares with no gaps */
@@ -66,19 +67,11 @@
 
 /* Responsive adjustments - maintain exact viewport coverage */
 @media (max-width: 480px) {
-  .mobileGrid .gridItem {
-    height: 25vh;
-    min-height: 25vh;
-    max-height: 25vh;
-  }
+  .mobileGrid { gap: 8px; }
 }
 
 @media (min-width: 481px) and (max-width: 768px) {
-  .mobileGrid .gridItem {
-    height: 25vh;
-    min-height: 25vh;
-    max-height: 25vh;
-  }
+  .mobileGrid .gridItem { min-height: auto; height: auto; max-height: none; }
 }
 
 /* All screen sizes maintain full viewport coverage */

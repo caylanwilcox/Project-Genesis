@@ -487,7 +487,7 @@ export default function TickerPage() {
               </div>
             </div>
           )}
-          <div className="max-w-[95%] mx-auto h-[420px] sm:h-[520px] lg:h-[640px] relative">
+          <div className="max-w-[95%] mx-auto relative">
             <ProfessionalChart
               symbol={ticker.symbol}
               currentPrice={livePrice}

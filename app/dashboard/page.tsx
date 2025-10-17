@@ -392,14 +392,14 @@ export default function Dashboard() {
 
       {/* Responsive Grid Layout */}
       <div className="min-h-screen pt-14 md:pt-12">
-        <div className="flex flex-col gap-2 p-2 h-[calc(100vh-5rem)] md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-3rem)] md:p-0">
+        <div className="flex flex-col gap-2 p-2 md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-3rem)] md:p-0">
             {tickers.map((ticker) => (
               <div
                 key={ticker.symbol}
                 onClick={() => {
                   router.push(`/ticker/${ticker.symbol}`)
                 }}
-                className="relative cursor-pointer border border-gray-800 transition-all duration-300 hover:border-gray-600 bg-gray-900 overflow-hidden rounded-lg flex-1 min-h-[140px] md:rounded-none md:min-h-0"
+                className="relative cursor-pointer border border-gray-800 transition-all duration-300 hover:border-gray-600 bg-gray-900 overflow-hidden rounded-lg flex-1 md:rounded-none md:min-h-0"
               >
                 {/* Animated Background */}
                 <div className={`absolute inset-0 opacity-10 bg-gradient-to-br ${getSignalColor(ticker.signal)}`}></div>
