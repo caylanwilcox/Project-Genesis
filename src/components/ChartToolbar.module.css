@@ -1,0 +1,56 @@
+.toolbarButtons { display: none; gap: 8px; align-items: center; }
+@media (min-width: 640px) { .toolbarButtons { display: flex; } }
+
+.settingsButton, .fullscreenButton {
+  color: #9ca3af;
+  padding: 4px;
+  transition: color 0.2s ease;
+}
+.settingsButton:hover, .fullscreenButton:hover { color: #fff; }
+/* Chart Toolbar - Settings and action buttons */
+
+.toolbarButtons {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .toolbarButtons {
+    gap: 0.5rem;
+  }
+}
+
+.toolbarButton {
+  color: rgb(156, 163, 175);
+  padding: 0.125rem;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .toolbarButton {
+    padding: 0.25rem;
+  }
+}
+
+.toolbarButton:hover {
+  color: white;
+}
+
+.settingsButton {
+  composes: toolbarButton;
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .settingsButton {
+    display: flex;
+  }
+}
+
+.fullscreenButton {
+  composes: toolbarButton;
+}

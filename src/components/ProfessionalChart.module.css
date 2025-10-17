@@ -1,0 +1,180 @@
+.chartContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0d0e15;
+}
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid #1f2937; /* gray-800 */
+}
+
+.chartSymbol {
+  display: none;
+  color: #fff;
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .chartSymbol { display: inline-block; }
+}
+
+.chartControls { display: flex; align-items: center; gap: 8px; }
+
+.chartMainArea {
+  position: relative;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.panning { cursor: grabbing; }
+.idle { cursor: grab; }
+
+.chartCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: calc(100% - 80px);
+  pointer-events: none;
+}
+
+.volumeCanvas {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 80px;
+  pointer-events: none;
+}
+
+.crosshairCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.bottomInfoBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  border-top: 1px solid #1f2937;
+  font-size: 12px;
+}
+
+.timeDisplay { display: flex; gap: 8px; color: #9ca3af; }
+.timeSeparator { color: #4b5563; }
+/* ProfessionalChart - Main chart container styles */
+
+.chartContainer {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #0d0e15;
+}
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem;
+  border-bottom: 1px solid rgb(31 41 55);
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .chartHeader {
+    padding: 0.5rem 1rem;
+    flex-wrap: nowrap;
+  }
+}
+
+.chartSymbol {
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .chartSymbol {
+    font-size: 1rem;
+  }
+}
+
+.chartControls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+}
+
+@media (min-width: 640px) {
+  .chartControls {
+    gap: 0.5rem;
+  }
+}
+
+.chartMainArea {
+  flex-grow: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.chartMainArea.panning {
+  cursor: grabbing;
+}
+
+.chartMainArea.idle {
+  cursor: grab;
+}
+
+.chartCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: calc(100% - 80px);
+  pointer-events: none;
+}
+
+.volumeCanvas {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  pointer-events: none;
+}
+
+.crosshairCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.bottomInfoBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 1rem;
+  border-top: 1px solid rgb(31 41 55);
+  font-size: 0.75rem;
+}
+
+.timeDisplay {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(156 163 175);
+}
+
+.timeSeparator {
+  color: rgb(75 85 99);
+}

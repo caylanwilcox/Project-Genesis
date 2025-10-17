@@ -397,30 +397,30 @@ export default function TickerPage() {
       )}
 
       {/* Ticker Header Section */}
-      <header className="bg-gray-900 border-b border-gray-800 py-4 px-4">
-        <div className="max-w-7xl mx-auto">
+      <header className="bg-gray-900 border-b border-gray-800 py-4 px-4 ticker-header">
+        <div className="max-w-7xl mx-auto ticker-header__container">
           <button
             onClick={() => router.push('/')}
             className="mb-4 text-sm text-gray-500 hover:text-white transition-colors flex items-center gap-2"
           >
             ← Back to Dashboard
           </button>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-baseline gap-4 sm:gap-6">
-                <h1 className="text-2xl sm:text-3xl font-bold">{ticker.symbol}</h1>
-                <div className="flex items-baseline gap-3">
-                  <span className="text-xl sm:text-2xl font-semibold transition-all duration-200 hover:text-green-300">
+          <div className="flex flex-col gap-4 ticker-header__content">
+            <div className="flex flex-row items-center justify-between gap-2 flex-wrap ticker-header__row">
+              <div className="flex flex-row items-baseline gap-2 sm:gap-4 ticker-header__titleGroup">
+                <h1 className="text-xl sm:text-3xl font-bold ticker-header__title">{ticker.symbol}</h1>
+                <div className="flex items-baseline gap-2 sm:gap-3">
+                  <span className="text-lg sm:text-2xl font-semibold transition-all duration-200 hover:text-green-300 ticker-header__price">
                     ${livePrice.toFixed(2)}
                   </span>
-                  <span className={`text-base sm:text-lg font-medium transition-colors ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`text-sm sm:text-lg font-medium transition-colors ticker-header__change ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {ticker.change >= 0 ? '+' : ''}{ticker.change.toFixed(2)} ({ticker.changePercent.toFixed(2)}%)
                   </span>
                 </div>
               </div>
               {/* Timeframe control lives inside ProfessionalChart; changes propagate via onTimeframeChange */}
-              <div className="flex flex-col items-center gap-1">
-                <div className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-sm sm:text-lg font-bold text-center ${
+              <div className="flex flex-col items-end sm:items-center gap-1">
+                <div className={`px-2.5 sm:px-4 py-1 sm:py-2 rounded-md text-[10px] sm:text-sm font-bold text-center ${
                   liveSignal.signal === 'strong_buy' ? 'bg-green-500/20 text-green-400 border border-green-500' :
                   liveSignal.signal === 'buy' ? 'bg-green-400/20 text-green-300 border border-green-400' :
                   liveSignal.signal === 'neutral' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500' :
@@ -429,7 +429,7 @@ export default function TickerPage() {
                 }`}>
                   {liveSignal.recommendation}
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-[10px] sm:text-xs text-gray-500">
                   {polygonData.length > 14 ? '✓ Live Signal' : 'Loading...'}
                 </div>
               </div>

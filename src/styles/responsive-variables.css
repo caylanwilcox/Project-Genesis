@@ -63,9 +63,37 @@
 /* Breakpoint-specific adjustments */
 @media (max-width: 480px) {
   :root {
-    --base-unit: 2vw; /* Larger base unit for mobile */
-    --card-min-height: calc(var(--viewport-height) * 0.2);
-    --card-max-height: calc(var(--viewport-height) * 0.22);
+    /* Scale typography and spacing down for narrow mobile screens (e.g., 375px) */
+    --base-unit: 2vw;
+
+    /* Smaller text sizes to prevent overflow on 375px width */
+    --text-xs: clamp(0.75rem, 2.4vw, 1rem);
+    --text-sm: clamp(0.85rem, 2.6vw, 1.1rem);
+    --text-base: clamp(0.95rem, 2.8vw, 1.2rem);
+    --text-lg: clamp(1.05rem, 3vw, 1.3rem);
+    --text-xl: clamp(1.15rem, 3.2vw, 1.4rem);
+    --text-2xl: clamp(1.25rem, 3.6vw, 1.6rem);
+    --text-3xl: clamp(1.4rem, 4vw, 1.8rem);
+    --text-4xl: clamp(1.6rem, 4.4vw, 2rem);
+    --text-5xl: clamp(1.8rem, 4.8vw, 2.2rem);
+
+    /* Tighter spacing for mobile */
+    --space-1: 0.25rem;
+    --space-2: 0.375rem;
+    --space-3: 0.5rem;
+    --space-4: 0.75rem;
+    --space-5: 1rem;
+    --space-6: 1.25rem;
+    --space-8: 1.5rem;
+    --space-10: 2rem;
+
+    /* Smaller signal badge to fit within 375px */
+    --signal-badge-width: clamp(12rem, 70vw, 18rem);
+    --signal-badge-height: clamp(6rem, 18vw, 8rem);
+
+    /* Shorter cards on mobile */
+    --card-min-height: calc(var(--viewport-height) * 0.22);
+    --card-max-height: calc(var(--viewport-height) * 0.25);
   }
 }
 

@@ -11,6 +11,40 @@ body {
   color: #ffffff;
 }
 
+/* Semantic chart variables */
+:root {
+  --chart-y-axis-gutter: clamp(60px, 8vw, 100px); /* width of price scale gutter on the right */
+  --chart-y-axis-label-inset: 5px; /* inner padding used when drawing y labels */
+}
+
+/* Responsive adjustments for y-axis gutter */
+@media (max-width: 480px) {
+  :root {
+    --chart-y-axis-gutter: 48px; /* Narrower for mobile to prevent overflow */
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  :root {
+    --chart-y-axis-gutter: 70px; /* Medium for tablets */
+  }
+}
+
+@media (min-width: 769px) {
+  :root {
+    --chart-y-axis-gutter: 90px; /* Wider for desktop to fit 6-digit prices */
+  }
+}
+
+.chart-container { /* outer wrapper for semantic targeting */ }
+.chart-y-axis { width: var(--chart-y-axis-gutter); }
+.chart-x-axis { height: 18px; }
+.ticker-header { }
+.ticker-header__title { }
+.ticker-header__stats { }
+
+/* Chart y-axis tags moved to ChartYAxisTags.module.css */
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;

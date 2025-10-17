@@ -3,6 +3,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Activity, TrendingUp, Maximize2, Minimize2, Settings, ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import styles from './ProfessionalChart.module.css'
+import controlStyles from './ChartControls.module.css'
+import interactionStyles from './ChartInteraction.module.css'
+import tagStyles from './ChartYAxisTags.module.css'
+import toolbarStyles from './ChartToolbar.module.css'
 
 interface ProfessionalChartProps {
   symbol: string
@@ -42,12 +47,14 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   const [timeframe, setTimeframe] = useState('1D')
   const [chartType, setChartType] = useState<'candles' | 'line'>('candles')
   const [data, setData] = useState<CandleData[]>([])
-  const [hoveredCandle, setHoveredCandle] = useState<CandleData | null>(null)
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
   const [useExternalData, setUseExternalData] = useState(false)
   const [chartPixelWidth, setChartPixelWidth] = useState<number>(0)
   const [interval, setInterval] = useState('15 min') // Default to 15 min to match 1D timeframe
   const [showIntervalDropdown, setShowIntervalDropdown] = useState(false)
+  const [showIndicatorsDropdown, setShowIndicatorsDropdown] = useState(false)
+  // Track the data timeframe string used for label formatting (e.g., '15m','1h','1d','1w','1M')
+  const [dataTimeframeForLabels, setDataTimeframeForLabels] = useState<string>('15m')
   const [isPanning, setIsPanning] = useState(false)
   const [panOffset, setPanOffset] = useState(0)
   const [panStart, setPanStart] = useState<{ x: number; offset: number } | null>(null)
@@ -61,6 +68,10 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   const [timeScaleStart, setTimeScaleStart] = useState<{ x: number; scale: number } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement>(null)
+  
+  // Y-axis price tags rendered as DOM for CSS styling
+  type OverlayKind = 'target' | 'stop' | 'entry' | 'current'
+  const [overlayTags, setOverlayTags] = useState<Array<{ y: number; label: string; kind: OverlayKind }>>([])
 
   // Generate realistic candlestick data
   const generateCandleData = useCallback(() => {
@@ -146,7 +157,12 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     // Setup canvas to fit parent container exactly
     const parentWidth = canvas.parentElement ? (canvas.parentElement as HTMLElement).clientWidth : 800
     const dpr = window.devicePixelRatio || 1
-    const padding = { top: 10, right: 80, bottom: 20, left: 10 }
+    // Reduce padding and label sizes on narrow screens to avoid overlap
+    const isNarrow = parentWidth < 420
+    // Read CSS variable for y-axis gutter so CSS controls the width
+    const cssGutter = getComputedStyle(document.documentElement).getPropertyValue('--chart-y-axis-gutter').trim()
+    const gutter = cssGutter.endsWith('px') ? parseInt(cssGutter) : (isNarrow ? 56 : 80)
+    const padding = isNarrow ? { top: 6, right: gutter, bottom: 14, left: 6 } : { top: 10, right: gutter, bottom: 20, left: 10 }
 
     // Use parent width - don't expand beyond container
     canvas.style.width = parentWidth + 'px'
@@ -198,7 +214,8 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     const priceRange = maxPrice - minPrice
 
     // Calculate volume range from visible data
-    const maxVolume = Math.max(...visibleData.map(d => d.volume))
+    const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
+    const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0
 
     // Draw grid lines
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'
@@ -206,23 +223,28 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     ctx.setLineDash([1, 1])
 
     // Horizontal grid lines (price levels)
-    for (let i = 0; i <= 8; i++) {
+    const horizontalTicks = isNarrow ? 5 : 8
+    for (let i = 0; i <= horizontalTicks; i++) {
       const y = padding.top + (chartHeight / 8) * i
       ctx.beginPath()
       ctx.moveTo(padding.left, y)
       ctx.lineTo(rect.width - padding.right, y)
       ctx.stroke()
 
-      // Price labels
+      // Price labels - centered within the gutter area
       const price = maxPrice - (priceRange / 8) * i
       ctx.fillStyle = '#6b7280'
-      ctx.font = '11px monospace'
-      ctx.textAlign = 'right'
-      ctx.fillText(price.toFixed(2), rect.width - 5, y + 3)
+      ctx.font = isNarrow ? '8px monospace' : '11px monospace'
+      ctx.textAlign = 'center'
+      // Position label in center of gutter
+      const labelX = rect.width - (gutter / 2)
+      ctx.fillText(price.toFixed(2), labelX, y + 3)
     }
 
     // Vertical grid lines (time)
-    for (let i = 0; i <= 6; i++) {
+    // Exactly three time labels across the x-axis
+    const verticalTicks = 2
+    for (let i = 0; i <= verticalTicks; i++) {
       const x = padding.left + (chartWidth / 6) * i
       ctx.beginPath()
       ctx.moveTo(x, padding.top)
@@ -235,32 +257,37 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       volCtx.lineTo(x, volChartHeight)
       volCtx.stroke()
 
-      // Time labels
+      // Time labels - drawn on volume canvas below the volume bars
       if (visibleData.length > 0) {
         const index = Math.min(visibleData.length - 1, Math.round((i / 6) * (visibleData.length - 1)))
         const ts = new Date(visibleData[index].time)
 
         // Format based on timeframe - show appropriate detail (New York timezone)
         let label = ''
-        if (timeframe === '1Y' || timeframe === '5Y' || timeframe === 'All') {
-          // For long timeframes, show year and month
+        // Format based on data timeframe granularity
+        if (dataTimeframeForLabels === '1M') {
           label = ts.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'America/New_York' })
-        } else if (timeframe === '1M' || timeframe === '3M' || timeframe === '6M' || timeframe === 'YTD') {
-          // For medium timeframes, show month and day
+        } else if (dataTimeframeForLabels === '1w' || dataTimeframeForLabels === '1d') {
           label = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
-        } else if (timeframe === '5D' || timeframe === '1D') {
-          // For daily timeframes, show date and time
-          label = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }) + ' ' +
-                  ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
         } else {
-          // For intraday, show just time
+          // Intraday (minutes/hours)
           label = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
         }
 
-        ctx.fillStyle = '#6b7280'
-        ctx.font = '10px monospace'
-        ctx.textAlign = 'center'
-        ctx.fillText(label, x, rect.height - 5)
+        // Draw labels on volume canvas below the volume bars
+        volCtx.fillStyle = isNarrow ? '#AAB2C5' : '#6b7280'
+        volCtx.font = isNarrow ? '9px monospace' : '10px monospace'
+        volCtx.textAlign = 'center'
+        // Optional subtle backdrop for narrow screens
+        if (isNarrow) {
+          const textWidth = volCtx.measureText(label).width
+          const bx = x - textWidth / 2 - 3
+          const by = volChartHeight + 2
+          volCtx.fillStyle = 'rgba(13,14,21,0.7)'
+          volCtx.fillRect(bx, by, textWidth + 6, 10)
+          volCtx.fillStyle = '#AAB2C5'
+        }
+        volCtx.fillText(label, x, volChartHeight + 12)
       }
     }
 
@@ -296,12 +323,12 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       ctx.fillRect(x - candleSpacing / 2, bodyTop, candleSpacing, bodyHeight)
 
       // Draw volume bars
-      const volHeight = (candle.volume / maxVolume) * volChartHeight * 0.8
+      const volHeight = maxVolume > 0 ? (candle.volume / maxVolume) * volChartHeight * 0.8 : 0
       volCtx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'
       volCtx.fillRect(x - candleSpacing / 2, volChartHeight - volHeight, candleSpacing, volHeight)
     })
 
-    // Draw price levels
+    // Draw price levels (render tag via DOM for CSS control)
     const drawPriceLine = (price: number, color: string, label: string, dashed = false) => {
       const y = padding.top + ((maxPrice - price) / priceRange) * chartHeight
 
@@ -317,29 +344,28 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       ctx.stroke()
 
       ctx.setLineDash([])
-
-      // Price tag
-      ctx.fillStyle = color
-      ctx.fillRect(rect.width - padding.right + 2, y - 10, padding.right - 7, 20)
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 10px monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText(price.toFixed(2), rect.width - padding.right / 2 - 2, y + 3)
     }
 
+    const nextTags: Array<{ y: number; label: string; kind: OverlayKind }> = []
     // Draw stop loss
     if (stopLoss) {
       drawPriceLine(stopLoss, '#ef444488', 'SL', true)
+      const y = padding.top + ((maxPrice - stopLoss) / priceRange) * chartHeight
+      nextTags.push({ y, label: stopLoss.toFixed(2), kind: 'stop' })
     }
 
     // Draw entry point
     if (entryPoint) {
       drawPriceLine(entryPoint, '#06b6d488', 'ENTRY', false)
+      const y = padding.top + ((maxPrice - entryPoint) / priceRange) * chartHeight
+      nextTags.push({ y, label: entryPoint.toFixed(2), kind: 'entry' })
     }
 
     // Draw targets
-    targets.forEach((target, i) => {
-      drawPriceLine(target, '#22c55e88', `T${i + 1}`, false)
+    targets.forEach((target) => {
+      drawPriceLine(target, '#22c55e88', 'T', false)
+      const y = padding.top + ((maxPrice - target) / priceRange) * chartHeight
+      nextTags.push({ y, label: target.toFixed(2), kind: 'target' })
     })
 
     // Current price line and tag (use last candle from original data, not just visible)
@@ -359,21 +385,27 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       ctx.stroke()
       ctx.setLineDash([])
 
-      // Price tag
-      ctx.fillStyle = '#fbbf24'
-      ctx.fillRect(rect.width - padding.right + 2, currentY - 11, padding.right - 7, 22)
-      ctx.fillStyle = '#000000'
-      ctx.font = 'bold 11px monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText(lastCandle.close.toFixed(2), rect.width - padding.right / 2 - 2, currentY + 4)
+      // Tag via DOM overlay
+      nextTags.push({ y: currentY, label: lastCandle.close.toFixed(2), kind: 'current' })
     }
 
-    // Draw volume scale
+    // Draw volume scale (accurate, unit-aware)
     volCtx.fillStyle = '#6b7280'
-    volCtx.font = '10px monospace'
-    volCtx.textAlign = 'right'
-    volCtx.fillText('Vol', volRect.width - 5, 12)
-    volCtx.fillText((maxVolume / 1000000).toFixed(0) + 'M', volRect.width - 5, 25)
+    volCtx.font = isNarrow ? '8px monospace' : '10px monospace'
+    volCtx.textAlign = 'center'
+    const formatVolume = (v: number): string => {
+      const abs = Math.abs(v)
+      if (abs >= 1e9) return (abs / 1e9 >= 10 ? (abs / 1e9).toFixed(0) : (abs / 1e9).toFixed(1)) + 'B'
+      if (abs >= 1e6) return (abs / 1e6 >= 10 ? (abs / 1e6).toFixed(0) : (abs / 1e6).toFixed(1)) + 'M'
+      if (abs >= 1e3) return (abs / 1e3 >= 10 ? (abs / 1e3).toFixed(0) : (abs / 1e3).toFixed(1)) + 'K'
+      return abs.toFixed(0)
+    }
+    // Position volume labels in center of gutter, vertically stacked
+    const volLabelX = volRect.width - (gutter / 2)
+    volCtx.fillText('Vol', volLabelX, 10)
+    volCtx.fillText(formatVolume(maxVolume), volLabelX, 22)
+
+    setOverlayTags(nextTags)
 
   }, [data, visibleRange, stopLoss, entryPoint, targets, timeframe, priceScale])
 
@@ -454,14 +486,11 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
 
         // Format timestamp based on timeframe (New York timezone)
         let timeStr = ''
-        if (timeframe === '1Y' || timeframe === '5Y' || timeframe === 'All') {
-          // For long timeframes, show full date
+        if (dataTimeframeForLabels === '1M') {
           timeStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })
-        } else if (timeframe === '1M' || timeframe === '3M' || timeframe === '6M' || timeframe === 'YTD') {
-          // For medium timeframes, show date
+        } else if (dataTimeframeForLabels === '1w' || dataTimeframeForLabels === '1d') {
           timeStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
         } else {
-          // For intraday, show date and time
           timeStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' }) + ' ' +
                     date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
         }
@@ -475,8 +504,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         ctx.textAlign = 'center'
         ctx.fillText(timeStr, mousePos.x, rect.height - 82)
 
-        // Update hovered candle info
-        setHoveredCandle(candle)
+        // Hover data no longer displayed in header
       }
     }
   }, [mousePos, data, visibleRange])
@@ -517,17 +545,18 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
 
   const handleMouseLeave = useCallback(() => {
     setMousePos(null)
-    setHoveredCandle(null)
+    // Hover data no longer displayed in header
     setIsPanning(false)
     setPanStart(null)
   }, [])
 
   // Close interval dropdown when clicking outside
+  const intervalDropdownRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (showIntervalDropdown) {
+      if (showIntervalDropdown && intervalDropdownRef.current) {
         const target = e.target as HTMLElement
-        if (!target.closest('.interval-dropdown-container')) {
+        if (!intervalDropdownRef.current.contains(target)) {
           setShowIntervalDropdown(false)
         }
       }
@@ -633,7 +662,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   }, [])
 
   const timeframes = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'All']
-  const intervals = ['1 min', '5 min', '15 min', '30 min', '1 hour', '1 day', '1 week', '1 month']
+  const intervals = ['1 min', '5 min', '15 min', '30 min', '1 hour', '1 day', '1 week', '1 month', '3 months', '6 months', '1 year']
 
   const handleTimeframeClick = (tf: string) => {
     console.log('[ProfessionalChart] Timeframe button clicked:', tf);
@@ -696,6 +725,9 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         '1 day': '1d',
         '1 week': '1w',
         '1 month': '1M',
+        '3 months': '3M',
+        '6 months': '6M',
+        '1 year': '1Y',
       }
       const mapped = map[newInterval]
       console.log('[ProfessionalChart] Mapped interval to timeframe:', mapped);
@@ -704,110 +736,81 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   }
 
   return (
-    <div ref={chartContainerRef} className="h-full flex flex-col bg-[#0d0e15]">
+    <div ref={chartContainerRef} className={styles.chartContainer}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
+      <div className={styles.chartHeader}>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-white font-semibold">{symbol}</span>
-            {hoveredCandle ? (
-              <>
-                <span className="text-gray-400 text-sm">O {hoveredCandle.open.toFixed(2)}</span>
-                <span className="text-gray-400 text-sm">H {hoveredCandle.high.toFixed(2)}</span>
-                <span className="text-gray-400 text-sm">L {hoveredCandle.low.toFixed(2)}</span>
-                <span className={`text-sm ${hoveredCandle.close >= hoveredCandle.open ? 'text-green-400' : 'text-red-400'}`}>
-                  C {hoveredCandle.close.toFixed(2)}
-                </span>
-                <span className={`text-sm ${hoveredCandle.close >= hoveredCandle.open ? 'text-green-400' : 'text-red-400'}`}>
-                  {hoveredCandle.close >= hoveredCandle.open ? '+' : ''}{((hoveredCandle.close - hoveredCandle.open) / hoveredCandle.open * 100).toFixed(2)}%
-                </span>
-                <span className="text-gray-400 text-sm">VOL {(hoveredCandle.volume / 1000000).toFixed(1)}M</span>
-              </>
-            ) : (
-              <>
-                <span className="text-gray-400 text-sm">O {currentPrice.toFixed(2)}</span>
-                <span className="text-gray-400 text-sm">H {(currentPrice * 1.002).toFixed(2)}</span>
-                <span className="text-gray-400 text-sm">L {(currentPrice * 0.998).toFixed(2)}</span>
-                <span className="text-gray-400 text-sm">C {currentPrice.toFixed(2)}</span>
-                <span className="text-green-400 text-sm">+0.02%</span>
-                <span className="text-gray-400 text-sm">VOL 50.5M</span>
-              </>
-            )}
+            <span className={styles.chartSymbol}>{symbol}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Range/Timeframe buttons */}
-          {timeframes.map((tf) => (
+        <div className={styles.chartControls}>
+            {/* Chart type pill */}
             <button
-              key={tf}
-              onClick={() => handleTimeframeClick(tf)}
-              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                timeframe === tf
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
+              onClick={() => setChartType(prev => (prev === 'candles' ? 'line' : 'candles'))}
+              className={controlStyles.chartTypeButton}
+              title="Toggle chart type"
             >
-              {tf}
+              {chartType === 'candles' ? 'Candle' : 'Line'}
             </button>
-          ))}
 
-          <div className="w-px h-4 bg-gray-700 mx-1" />
+            <div ref={intervalDropdownRef} className={controlStyles.intervalDropdownContainer}>
+              <button
+                onClick={() => setShowIntervalDropdown(!showIntervalDropdown)}
+                className={controlStyles.intervalButton}
+              >
+                {interval}
+                <ChevronDown size={10} className="sm:w-3 sm:h-3" />
+              </button>
+              {showIntervalDropdown && (
+                <div className={controlStyles.intervalDropdown}>
+                  {intervals.map((int) => (
+                    <button
+                      key={int}
+                      onClick={() => handleIntervalChange(int)}
+                      className={`${controlStyles.intervalOption} ${interval === int ? controlStyles.active : ''}`}
+                    >
+                      {int}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          {/* Chart type toggle (candles icon) */}
-          <button className="text-gray-400 hover:text-white p-1" title="Chart Type">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <rect x="2" y="4" width="2" height="8" />
-              <rect x="7" y="2" width="2" height="12" />
-              <rect x="12" y="6" width="2" height="6" />
-            </svg>
-          </button>
+            {/* Indicators pill (hidden on mobile to reduce clutter) */}
+            <div className="relative hidden sm:block">
+              <button
+                onClick={() => setShowIndicatorsDropdown(!showIndicatorsDropdown)}
+                className="px-3 py-1.5 text-xs font-medium rounded-full bg-gray-800/60 text-gray-200 hover:bg-gray-800 transition-colors whitespace-nowrap flex items-center gap-1"
+              >
+                Indicators <ChevronDown size={12} />
+              </button>
+              {showIndicatorsDropdown && (
+                <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 min-w-[160px]">
+                  <div className="px-3 py-2 text-xs text-gray-400">Coming soon</div>
+                </div>
+              )}
+            </div>
 
-          {/* Interval dropdown */}
-          <div className="relative interval-dropdown-container">
-            <button
-              onClick={() => setShowIntervalDropdown(!showIntervalDropdown)}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
-            >
-              Interval: {interval}
-              <ChevronDown size={12} />
-            </button>
-            {showIntervalDropdown && (
-              <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 min-w-[120px]">
-                {intervals.map((int) => (
-                  <button
-                    key={int}
-                    onClick={() => handleIntervalChange(int)}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition-colors first:rounded-t last:rounded-b ${
-                      interval === int ? 'text-blue-400 bg-gray-700/50' : 'text-gray-300'
-                    }`}
-                  >
-                    {int}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="w-px h-4 bg-gray-700 mx-1" />
-
-          <button className="text-gray-400 hover:text-white p-1" title="Settings">
-            <Settings size={14} />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            className="text-gray-400 hover:text-white p-1"
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-          >
-            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
+            <div className={toolbarStyles.toolbarButtons}>
+              <button className={toolbarStyles.settingsButton} title="Settings">
+                <Settings className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5" />
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className={toolbarStyles.fullscreenButton}
+                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              >
+                {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5" /> : <Maximize2 className="w-3.5 h-3.5 sm:w-3.5 sm:h-3.5" />}
+              </button>
+            </div>
         </div>
       </div>
 
       {/* Main chart area */}
       <div
-        className="flex-grow relative overflow-hidden"
-        style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+        className={`${styles.chartMainArea} ${isPanning ? styles.panning : styles.idle}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -815,75 +818,80 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       >
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full"
-          style={{ height: 'calc(100% - 80px)', pointerEvents: 'none' }}
+          className={styles.chartCanvas}
         />
 
         {/* Volume chart */}
         <canvas
           ref={volumeCanvasRef}
-          className="absolute bottom-0 left-0 right-0"
-          style={{ height: '80px', pointerEvents: 'none' }}
+          className={styles.volumeCanvas}
         />
 
         {/* Crosshair overlay */}
         <canvas
           ref={crosshairCanvasRef}
-          className="absolute inset-0 w-full h-full"
-          style={{ pointerEvents: 'none' }}
+          className={styles.crosshairCanvas}
         />
+
+        {/* CSS-stylable y-axis tags */}
+        <div className={tagStyles.yAxisTagsContainer} aria-hidden>
+          {overlayTags.map((tag, idx) => (
+            <div
+              key={idx}
+              className={`${tagStyles.yAxisTag} ${
+                tag.kind === 'current' ? tagStyles['yAxisTag--current'] :
+                tag.kind === 'entry' ? tagStyles['yAxisTag--entry'] :
+                tag.kind === 'stop' ? tagStyles['yAxisTag--stop'] : tagStyles['yAxisTag--target']
+              }`}
+              style={{ top: `${tag.y - 11}px` }}
+            >
+              <span className={tagStyles.yAxisTagLabel}>{tag.label}</span>
+            </div>
+          ))}
+        </div>
 
         {/* Price scale drag area - right side of chart */}
         <div
           ref={scaleAreaRef}
-          className="absolute right-0 top-0 w-20 hover:bg-blue-500/5 transition-colors"
-          style={{
-            height: 'calc(100% - 80px)',
-            cursor: isScaling ? 'ns-resize' : 'ns-resize',
-            pointerEvents: 'auto'
-          }}
+          className={interactionStyles.priceScaleDragArea}
           onMouseDown={handleScaleMouseDown}
           onMouseMove={handleScaleMouseMove}
           onDoubleClick={handleScaleDoubleClick}
           title="Drag to zoom price scale (double-click to reset)"
         >
           {/* Visual indicator for drag area */}
-          <div className="absolute right-1 top-1/2 -translate-y-1/2 flex flex-col gap-1 opacity-30 hover:opacity-70 transition-opacity">
-            <div className="w-3 h-0.5 bg-gray-400"></div>
-            <div className="w-3 h-0.5 bg-gray-400"></div>
-            <div className="w-3 h-0.5 bg-gray-400"></div>
+          <div className={interactionStyles.dragIndicator}>
+            <div className={interactionStyles.dragIndicatorLine}></div>
+            <div className={interactionStyles.dragIndicatorLine}></div>
+            <div className={interactionStyles.dragIndicatorLine}></div>
           </div>
 
           {/* Zoom level indicator */}
           {priceScale !== 1.0 && (
-            <div className="absolute right-2 bottom-4 bg-gray-800/90 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300">
+            <div className={interactionStyles.zoomIndicator}>
               {priceScale.toFixed(1)}x
             </div>
           )}
         </div>
 
-        {/* Time scale drag area - bottom of chart (x-axis) */}
+        {/* Time scale drag area - below volume chart where time labels are */}
         <div
-          className="absolute bottom-20 left-0 right-20 h-8 hover:bg-blue-500/5 transition-colors"
-          style={{
-            cursor: isTimeScaling ? 'ew-resize' : 'ew-resize',
-            pointerEvents: 'auto'
-          }}
+          className={interactionStyles.timeScaleDragArea}
           onMouseDown={handleTimeScaleMouseDown}
           onMouseMove={handleTimeScaleMouseMove}
           onDoubleClick={handleTimeScaleDoubleClick}
-          title="Drag to zoom time scale (double-click to reset)"
+          title="Drag horizontally to zoom time scale (double-click to reset)"
         >
           {/* Visual indicator for drag area */}
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-1 flex gap-1 opacity-30 hover:opacity-70 transition-opacity">
-            <div className="w-0.5 h-3 bg-gray-400"></div>
-            <div className="w-0.5 h-3 bg-gray-400"></div>
-            <div className="w-0.5 h-3 bg-gray-400"></div>
+          <div className={interactionStyles.timeScaleDragIndicator}>
+            <div className={interactionStyles.timeScaleDragIndicatorLine}></div>
+            <div className={interactionStyles.timeScaleDragIndicatorLine}></div>
+            <div className={interactionStyles.timeScaleDragIndicatorLine}></div>
           </div>
 
           {/* Zoom level indicator */}
           {timeScale !== 1.0 && (
-            <div className="absolute left-4 bottom-1 bg-gray-800/90 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300">
+            <div className={interactionStyles.timeZoomIndicator}>
               {timeScale.toFixed(1)}x
             </div>
           )}
@@ -891,18 +899,11 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       </div>
 
       {/* Bottom info bar */}
-      <div className="flex items-center justify-between px-4 py-1 border-t border-gray-800 text-xs">
-        <div className="flex items-center gap-4 text-gray-400">
+      <div className={styles.bottomInfoBar}>
+        <div className={styles.timeDisplay}>
           <span>{currentTime.toLocaleTimeString('en-US', { hour12: false, timeZone: 'America/New_York' })} (ET)</span>
-          <span className="text-gray-600">|</span>
+          <span className={styles.timeSeparator}>|</span>
           <span>{currentTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })}</span>
-          <span className="text-gray-600">|</span>
-          <button className="hover:text-white">%</button>
-          <button className="hover:text-white">LOG</button>
-          <button className="text-blue-400">AUTO</button>
-        </div>
-        <div className="text-gray-400">
-          <span>VOLUME SMA 21</span>
         </div>
       </div>
     </div>
