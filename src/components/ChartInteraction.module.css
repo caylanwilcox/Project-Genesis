@@ -38,6 +38,13 @@
   border: 1px solid #374151; border-radius: 6px;
   padding: 2px 6px; font-size: 12px; color: #d1d5db;
 }
+
+/* Height resize handle (bottom bar) */
+.heightResizeHandle {
+  position: absolute; left: 0; right: var(--chart-y-axis-gutter); bottom: 0;
+  height: 10px; cursor: ns-resize; background: transparent;
+}
+.heightResizeHandle:hover { background: rgba(59, 130, 246, 0.06); }
 /* Chart Interaction - Drag areas and zoom controls */
 
 .priceScaleDragArea {

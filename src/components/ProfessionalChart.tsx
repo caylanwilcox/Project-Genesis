@@ -68,6 +68,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   const [timeScaleStart, setTimeScaleStart] = useState<{ x: number; scale: number } | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const chartContainerRef = useRef<HTMLDivElement>(null)
+  const [customHeight, setCustomHeight] = useState<number | null>(null)
   
   // Y-axis price tags rendered as DOM for CSS styling
   type OverlayKind = 'target' | 'stop' | 'entry' | 'current'
@@ -196,22 +197,24 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     const chartHeight = rect.height - padding.top - padding.bottom
     const volChartHeight = volRect.height - 5 // Reduced padding to give more space for volume bars
 
-    // Calculate price range from visible data
-    const allPrices = visibleData.flatMap(d => [d.high, d.low])
-    if (stopLoss) allPrices.push(stopLoss)
-    if (entryPoint) allPrices.push(entryPoint)
-    allPrices.push(...targets)
+    // Calculate price range from visible candles only (exclude overlays)
+    const highs = visibleData.map(d => d.high)
+    const lows = visibleData.map(d => d.low)
+    const visibleMin = Math.min(...lows)
+    const visibleMax = Math.max(...highs)
+    const rawRange = Math.max(1e-6, visibleMax - visibleMin)
 
-    const dataMinPrice = Math.min(...allPrices)
-    const dataMaxPrice = Math.max(...allPrices)
-    const dataPriceRange = dataMaxPrice - dataMinPrice
-    const priceCenter = (dataMinPrice + dataMaxPrice) / 2
+    // Add a modest vertical margin (~5%) to avoid clipping wicks
+    const margin = rawRange * 0.05
+    const rangedMin = visibleMin - margin
+    const rangedMax = visibleMax + margin
+    const centered = (rangedMin + rangedMax) / 2
 
-    // Apply price scale - zoom in/out from center
-    const scaledRange = dataPriceRange / priceScale
-    const minPrice = priceCenter - (scaledRange / 2) * 1.002
-    const maxPrice = priceCenter + (scaledRange / 2) * 1.002
-    const priceRange = maxPrice - minPrice
+    // Apply price scale - zoom in/out from center, keep symmetric bounds
+    const scaledRange = (rangedMax - rangedMin) / priceScale
+    const minPrice = centered - scaledRange / 2
+    const maxPrice = centered + scaledRange / 2
+    const priceRange = Math.max(1e-6, maxPrice - minPrice)
 
     // Calculate volume range from visible data
     const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
@@ -771,7 +774,11 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   }
 
   return (
-    <div ref={chartContainerRef} className={styles.chartContainer}>
+    <div
+      ref={chartContainerRef}
+      className={styles.chartContainer}
+      style={customHeight ? { minHeight: customHeight, height: customHeight } : undefined}
+    >
       {/* Header */}
       <div className={styles.chartHeader}>
         <div className="flex items-center gap-4">
@@ -846,6 +853,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       {/* Main chart area */}
       <div
         className={`${styles.chartMainArea} ${isPanning ? styles.panning : styles.idle}`}
+        style={customHeight ? { minHeight: customHeight } : undefined}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -888,6 +896,28 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
             </div>
           ))}
         </div>
+
+        {/* Height resize handle */}
+        <div
+          className={interactionStyles.heightResizeHandle}
+          onMouseDown={(e) => {
+            e.preventDefault()
+            const startY = e.clientY
+            const startH = (chartContainerRef.current?.getBoundingClientRect().height || 0)
+            const move = (ev: MouseEvent) => {
+              const delta = ev.clientY - startY
+              const newH = Math.max(320, startH + delta)
+              setCustomHeight(newH)
+            }
+            const up = () => {
+              document.removeEventListener('mousemove', move)
+              document.removeEventListener('mouseup', up)
+            }
+            document.addEventListener('mousemove', move)
+            document.addEventListener('mouseup', up)
+          }}
+          title="Drag to resize chart height"
+        />
 
         {/* Price scale drag area - right side of chart */}
         <div
