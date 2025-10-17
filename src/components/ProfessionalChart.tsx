@@ -194,7 +194,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     // Calculate dimensions
     const chartWidth = rect.width - padding.left - padding.right
     const chartHeight = rect.height - padding.top - padding.bottom
-    const volChartHeight = volRect.height - 20
+    const volChartHeight = volRect.height - 5 // Reduced padding to give more space for volume bars
 
     // Calculate price range from visible data
     const allPrices = visibleData.flatMap(d => [d.high, d.low])
@@ -322,10 +322,12 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       ctx.fillStyle = isGreen ? '#22c55e' : '#ef4444'
       ctx.fillRect(x - candleSpacing / 2, bodyTop, candleSpacing, bodyHeight)
 
-      // Draw volume bars
-      const volHeight = maxVolume > 0 ? (candle.volume / maxVolume) * volChartHeight * 0.8 : 0
-      volCtx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'
-      volCtx.fillRect(x - candleSpacing / 2, volChartHeight - volHeight, candleSpacing, volHeight)
+      // Draw volume bars - simple linear scaling
+      const volBarMaxHeight = volChartHeight - 25 // Leave space for labels at bottom
+      const volHeight = maxVolume > 0 ? (candle.volume / maxVolume) * volBarMaxHeight : 0
+
+      volCtx.fillStyle = isGreen ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)'
+      volCtx.fillRect(x - candleSpacing / 2, volChartHeight - 25 - volHeight, candleSpacing, volHeight)
     })
 
     // Draw price levels (render tag via DOM for CSS control)
@@ -391,7 +393,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
 
     // Draw volume scale (accurate, unit-aware)
     volCtx.fillStyle = '#6b7280'
-    volCtx.font = isNarrow ? '8px monospace' : '10px monospace'
+    volCtx.font = isNarrow ? '7px monospace' : '9px monospace'
     volCtx.textAlign = 'center'
     const formatVolume = (v: number): string => {
       const abs = Math.abs(v)
@@ -400,10 +402,10 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       if (abs >= 1e3) return (abs / 1e3 >= 10 ? (abs / 1e3).toFixed(0) : (abs / 1e3).toFixed(1)) + 'K'
       return abs.toFixed(0)
     }
-    // Position volume labels in center of gutter, vertically stacked
+    // Position volume labels in center of gutter at bottom
     const volLabelX = volRect.width - (gutter / 2)
-    volCtx.fillText('Vol', volLabelX, 10)
-    volCtx.fillText(formatVolume(maxVolume), volLabelX, 22)
+    volCtx.fillText('Vol', volLabelX, volChartHeight - 18)
+    volCtx.fillText(formatVolume(maxVolume), volLabelX, volChartHeight - 6)
 
     setOverlayTags(nextTags)
 
@@ -548,6 +550,39 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     // Hover data no longer displayed in header
     setIsPanning(false)
     setPanStart(null)
+  }, [])
+
+  // Touch support for mobile panning and crosshair
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 0) return
+    e.preventDefault()
+    const t = e.touches[0]
+    setIsPanning(true)
+    setPanStart({ x: t.clientX, offset: panOffset })
+  }, [panOffset])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 0) return
+    e.preventDefault()
+    const t = e.touches[0]
+    const rect = e.currentTarget.getBoundingClientRect()
+
+    if (isPanning && panStart) {
+      const deltaX = t.clientX - panStart.x
+      const candlesPerPixel = 100 / rect.width
+      const candleDelta = -deltaX * candlesPerPixel * 2
+      const newOffset = panStart.offset + candleDelta
+      const maxOffset = Math.max(0, data.length - 100)
+      setPanOffset(Math.max(0, Math.min(maxOffset, newOffset)))
+    }
+
+    setMousePos({ x: t.clientX - rect.left, y: t.clientY - rect.top })
+  }, [isPanning, panStart, data.length])
+
+  const handleTouchEnd = useCallback(() => {
+    setIsPanning(false)
+    setPanStart(null)
+    setMousePos(null)
   }, [])
 
   // Close interval dropdown when clicking outside
@@ -815,6 +850,10 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         <canvas
           ref={canvasRef}

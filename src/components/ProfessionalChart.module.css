@@ -29,6 +29,7 @@
   position: relative;
   flex-grow: 1;
   overflow: hidden;
+  touch-action: none; /* allow custom touch panning */
 }
 
 .panning { cursor: grabbing; }
