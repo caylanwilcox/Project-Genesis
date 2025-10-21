@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { usePolygonData, usePolygonSnapshot } from '@/hooks/usePolygonData'
+import { polygonService } from '@/services/polygonService'
 import { NormalizedChartData, Timeframe } from '@/types/polygon'
 
 const ProfessionalChart = dynamic(() => import('@/components/ProfessionalChart').then(m => m.ProfessionalChart), {
@@ -31,6 +32,7 @@ export default function TickerPage() {
   const symbol = params?.symbol as string
   const [ticker, setTicker] = useState<TickerDetails | null>(null)
   const [livePrice, setLivePrice] = useState(0)
+  const [sessionOpen, setSessionOpen] = useState<number | null>(null)
   const [timeframe, setTimeframe] = useState<Timeframe>('15m') // Start with 15m to match chart's 1D default
   const [displayTimeframe, setDisplayTimeframe] = useState<string>('1D') // Track display timeframe for limit calculation
 
@@ -280,6 +282,40 @@ export default function TickerPage() {
   const todayHigh = recentBars.length > 0 ? Math.max(...recentBars.map(b => b.high)) : livePrice
   const todayLow = recentBars.length > 0 ? Math.min(...recentBars.map(b => b.low)) : livePrice
 
+  // Derive session open price (prefer snapshot; fallback to aggregates for today's first bar in ET)
+  useEffect(() => {
+    // Prefer snapshot day open when available
+    const snapOpen = snapshot?.day?.o
+    if (snapOpen && typeof snapOpen === 'number') {
+      setSessionOpen(snapOpen)
+      return
+    }
+
+    if (polygonData.length === 0) return
+
+    try {
+      // Find earliest bar from the latest ET trading day in loaded data
+      const toEtDate = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+      const latestEtDate = toEtDate(polygonData[polygonData.length - 1].time)
+      // Walk back to find the first bar of that ET date
+      let firstIdx = polygonData.length - 1
+      for (let i = polygonData.length - 2; i >= 0; i--) {
+        if (toEtDate(polygonData[i].time) !== latestEtDate) break
+        firstIdx = i
+      }
+      const firstBar = polygonData[firstIdx]
+      if (firstBar) setSessionOpen(firstBar.open)
+    } catch (e) {
+      // Fallback: fetch daily bar and use its open
+      (async () => {
+        try {
+          const daily = await polygonService.getAggregates(symbol?.toUpperCase() || '', '1d', 1)
+          if (daily && daily.length > 0) setSessionOpen(daily[daily.length - 1].open)
+        } catch {}
+      })()
+    }
+  }, [snapshot, polygonData, symbol])
+
   useEffect(() => {
     if (symbol) {
       const data: TickerDetails = {
@@ -440,7 +476,7 @@ export default function TickerPage() {
               <div className="flex flex-wrap gap-4 sm:gap-6 text-xs sm:text-sm border-t border-gray-800 pt-3">
                 <div className="flex flex-col">
                   <span className="text-gray-500">Open</span>
-                  <span className="text-white font-semibold">${recentBars.length > 0 ? recentBars[0].open.toFixed(2) : livePrice.toFixed(2)}</span>
+                  <span className="text-white font-semibold">${(sessionOpen ?? (recentBars.length > 0 ? recentBars[0].open : livePrice)).toFixed(2)}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-gray-500">High</span>
