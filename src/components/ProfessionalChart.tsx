@@ -44,24 +44,41 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
     const chartArea = chartMainAreaRef.current
     if (!chartArea) return
 
+    let rafId: number | null = null
+    let pendingZoom = 1
+
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
       e.stopPropagation()
 
-      // Use multiplicative zoom for smooth, natural scaling
-      // Negative deltaY = zoom in (increase scale)
-      // Positive deltaY = zoom out (decrease scale)
-      const zoomFactor = Math.pow(1.001, -e.deltaY)
+      // Accumulate zoom changes for smooth animation
+      // Use smaller exponent for finer control
+      const sensitivity = 0.0015 // Adjust this for zoom speed (higher = faster)
+      const zoomDelta = -e.deltaY * sensitivity
+      pendingZoom *= Math.exp(zoomDelta)
 
-      setTimeScale((prev) => {
-        const newScale = prev * zoomFactor
-        return Math.max(0.2, Math.min(5, newScale))
+      // Cancel previous animation frame
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+
+      // Apply zoom on next frame for smooth rendering
+      rafId = requestAnimationFrame(() => {
+        setTimeScale((prev) => {
+          const newScale = prev * pendingZoom
+          pendingZoom = 1 // Reset accumulator
+          return Math.max(0.2, Math.min(5, newScale))
+        })
+        rafId = null
       })
     }
 
     chartArea.addEventListener('wheel', handleWheel, { passive: false })
 
     return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
       chartArea.removeEventListener('wheel', handleWheel)
     }
   }, [setTimeScale])

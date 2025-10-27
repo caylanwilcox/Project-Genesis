@@ -34,9 +34,11 @@ export const YAxisGutter: React.FC<YAxisGutterProps> = ({ priceScale, onPriceSca
     e.preventDefault()
     e.stopPropagation()
 
-    const delta = -e.deltaY
-    const sensitivity = 0.001
-    const newScale = Math.max(0.1, Math.min(10, priceScale + delta * sensitivity))
+    // Use multiplicative zoom for smooth scaling
+    const sensitivity = 0.0015
+    const zoomDelta = -e.deltaY * sensitivity
+    const zoomFactor = Math.exp(zoomDelta)
+    const newScale = Math.max(0.1, Math.min(10, priceScale * zoomFactor))
     onPriceScaleChange(newScale)
   }
 
@@ -46,7 +48,8 @@ export const YAxisGutter: React.FC<YAxisGutterProps> = ({ priceScale, onPriceSca
 
       const deltaY = startYRef.current - e.clientY
       const sensitivity = 0.005
-      const newScale = Math.max(0.1, Math.min(10, startScaleRef.current + deltaY * sensitivity))
+      const zoomFactor = Math.exp(deltaY * sensitivity)
+      const newScale = Math.max(0.1, Math.min(10, startScaleRef.current * zoomFactor))
       onPriceScaleChange(newScale)
     }
 
@@ -55,7 +58,8 @@ export const YAxisGutter: React.FC<YAxisGutterProps> = ({ priceScale, onPriceSca
 
       const deltaY = startYRef.current - e.touches[0].clientY
       const sensitivity = 0.005
-      const newScale = Math.max(0.1, Math.min(10, startScaleRef.current + deltaY * sensitivity))
+      const zoomFactor = Math.exp(deltaY * sensitivity)
+      const newScale = Math.max(0.1, Math.min(10, startScaleRef.current * zoomFactor))
       onPriceScaleChange(newScale)
     }
 

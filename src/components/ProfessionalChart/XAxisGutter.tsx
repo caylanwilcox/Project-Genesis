@@ -34,9 +34,11 @@ export const XAxisGutter: React.FC<XAxisGutterProps> = ({ timeScale, onTimeScale
     e.preventDefault()
     e.stopPropagation()
 
+    // Use multiplicative zoom for smooth scaling
     const delta = -e.deltaX || -e.deltaY
-    const sensitivity = 0.001
-    const newScale = Math.max(0.2, Math.min(5, timeScale + delta * sensitivity))
+    const sensitivity = 0.0015
+    const zoomFactor = Math.exp(delta * sensitivity)
+    const newScale = Math.max(0.2, Math.min(5, timeScale * zoomFactor))
     onTimeScaleChange(newScale)
   }
 
@@ -46,7 +48,8 @@ export const XAxisGutter: React.FC<XAxisGutterProps> = ({ timeScale, onTimeScale
 
       const deltaX = e.clientX - startXRef.current
       const sensitivity = 0.003
-      const newScale = Math.max(0.2, Math.min(5, startScaleRef.current + deltaX * sensitivity))
+      const zoomFactor = Math.exp(deltaX * sensitivity)
+      const newScale = Math.max(0.2, Math.min(5, startScaleRef.current * zoomFactor))
       onTimeScaleChange(newScale)
     }
 
@@ -55,7 +58,8 @@ export const XAxisGutter: React.FC<XAxisGutterProps> = ({ timeScale, onTimeScale
 
       const deltaX = e.touches[0].clientX - startXRef.current
       const sensitivity = 0.003
-      const newScale = Math.max(0.2, Math.min(5, startScaleRef.current + deltaX * sensitivity))
+      const zoomFactor = Math.exp(deltaX * sensitivity)
+      const newScale = Math.max(0.2, Math.min(5, startScaleRef.current * zoomFactor))
       onTimeScaleChange(newScale)
     }
 

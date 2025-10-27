@@ -95,7 +95,7 @@ export const Crosshair: React.FC<CrosshairProps> = ({
     const tooltipX = snapX + 10
     const tooltipY = 10
     const tooltipWidth = 150
-    const tooltipHeight = 105
+    const tooltipHeight = 120
 
     // Tooltip background
     ctx.fillStyle = 'rgba(30, 30, 30, 0.95)'
@@ -112,15 +112,24 @@ export const Crosshair: React.FC<CrosshairProps> = ({
     const textX = tooltipX + 8
     let textY = tooltipY + 15
 
-    // Format time
+    // Format date and time
     const date = new Date(candle.time)
+    const dateStr = date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'America/New_York'
+    })
     const timeStr = date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false
+      hour12: false,
+      timeZone: 'America/New_York'
     })
 
-    ctx.fillText(`Time: ${timeStr}`, textX, textY)
+    ctx.fillText(`${dateStr}`, textX, textY)
+    textY += 15
+    ctx.fillText(`${timeStr} ET`, textX, textY)
     textY += 15
 
     // OHLC data with colors
