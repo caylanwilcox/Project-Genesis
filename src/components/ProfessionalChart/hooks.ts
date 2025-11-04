@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from 'react'
 import { CandleData } from './types'
+import { Timeframe } from '@/types/polygon'
 
 export function useFullscreen(containerRef: React.RefObject<HTMLDivElement>) {
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -51,40 +52,83 @@ export function useChartData(externalData: CandleData[] | undefined, currentPric
 
   useEffect(() => {
     if (externalData && externalData.length > 0) {
-      setData(externalData)
+      console.log(`[useChartData] Setting external data: ${externalData.length} bars`)
+      // Only update if data is actually different (prevents flash of old data)
+      setData(prevData => {
+        // Check if data has actually changed
+        if (prevData.length === externalData.length &&
+            prevData[0]?.time === externalData[0]?.time &&
+            prevData[prevData.length - 1]?.time === externalData[externalData.length - 1]?.time) {
+          console.log('[useChartData] Data unchanged, skipping update')
+          return prevData
+        }
+        return externalData
+      })
       setUseExternalData(true)
       onDataUpdate?.(externalData)
-    } else {
-      setData(generateCandleData())
-      setUseExternalData(false)
     }
-  }, [externalData, generateCandleData, onDataUpdate])
+    // Don't show mock data - wait for real data from Polygon
+    // If externalData is empty but we have old data, keep showing old data (prevents flash)
+  }, [externalData, onDataUpdate])
 
   return { data, useExternalData }
 }
 
-export function useVisibleRange(data: CandleData[], panOffset: number, timeScale: number) {
+export function useVisibleRange(
+  data: CandleData[],
+  panOffset: number,
+  timeScale: number,
+  displayTimeframe?: string,
+  dataTimeframe?: string
+) {
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 100 })
 
   useEffect(() => {
     if (data.length === 0) return
-    const baseCandlesInView = 100
-    const candlesInView = Math.round(baseCandlesInView / timeScale)
 
-    // Calculate how many candles to actually show
-    // Negative panOffset = show fewer candles (creates white space on right)
-    // Positive panOffset = scroll back in time
-    // Whitespace should be a fixed percentage, not scale with zoom
-    const whiteSpacePadding = panOffset < 0 ? Math.abs(panOffset) : 0
-    const effectiveCandlesInView = Math.max(1, Math.round(candlesInView - whiteSpacePadding))
-    const scrollBack = Math.max(0, panOffset)
+    // POLICY: Auto-fit mode when timeScale=1.0 and panOffset=0
+    // Shows last N bars based on displayTimeframe to align with UX expectations
+    const shouldAutoFit = timeScale === 1.0 && panOffset === 0
+
+    // Determine default bars per display timeframe
+    const getDefaultBarsForView = (display?: string, dataTf?: string): number => {
+      if (!display || !dataTf) return 100
+      if (display === '1D' && (dataTf === '15m' || dataTf === '5m' || dataTf === '1m')) return 30 // ~trading day
+      if (display === '5D' && dataTf === '1h') return 40
+      if (display === '1M' && dataTf === '4h') return 44
+      if (display === '3M' && dataTf === '1d') return 63
+      if (display === '6M' && dataTf === '1d') return 126
+      if (display === 'YTD' && dataTf === '1d') return 200
+      if (display === '1Y' && dataTf === '1d') return 252
+      if (display === '5Y' && dataTf === '1w') return 260
+      if (display === 'All' && dataTf === '1M') return data.length
+      return 100
+    }
+
+    let effectiveCandlesInView: number
+    let scrollBack: number
+
+    const baseCandlesInView = getDefaultBarsForView(displayTimeframe, dataTimeframe)
+
+    if (shouldAutoFit) {
+      // Auto-fit mode: show last N bars based on timeframe defaults
+      effectiveCandlesInView = Math.min(baseCandlesInView, data.length)
+      scrollBack = 0
+    } else {
+      // Manual zoom/pan mode: scale relative to default view
+      const candlesInView = Math.round(baseCandlesInView / timeScale)
+
+      // panOffset = how far back in time we've scrolled
+      effectiveCandlesInView = candlesInView
+      scrollBack = Math.max(0, panOffset)
+    }
 
     // Calculate visible range - end at latest data minus scroll back
     const end = Math.min(data.length, data.length - scrollBack)
     const start = Math.max(0, end - effectiveCandlesInView)
 
     setVisibleRange({ start, end })
-  }, [panOffset, data.length, timeScale])
+  }, [panOffset, data.length, timeScale, displayTimeframe, dataTimeframe])
 
   return visibleRange
 }
@@ -93,7 +137,7 @@ export function useCurrentTime() {
   const [currentTime, setCurrentTime] = useState(new Date())
   useEffect(() => {
     const updateTime = () => setCurrentTime(new Date())
-    const timeInterval = window.setInterval(updateTime, 1000)
+    const timeInterval = window.setInterval(updateTime, 2000)
     return () => window.clearInterval(timeInterval)
   }, [])
   return currentTime

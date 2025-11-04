@@ -30,12 +30,10 @@ export function useChartInteraction(
       const candleDelta = deltaX * candlesPerPixel * 2
       const newOffset = panStart.offset + candleDelta
 
-      // Allow panning in both directions
-      // Negative offset = white space on right (future)
-      // Positive offset = scrolled back in time (past)
-      // Use actualCandlesInView to account for zoom level
+      // POLICY: Allow panning back in time (positive offset)
+      // Prevent future whitespace (no negative offset)
       const maxOffset = Math.max(0, data.length - actualCandlesInView)
-      const minOffset = -actualCandlesInView // Allow panning into future by full screen width
+      const minOffset = 0 // No future whitespace
       setPanOffset(Math.max(minOffset, Math.min(maxOffset, newOffset)))
     } else {
       setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
@@ -113,10 +111,10 @@ export function useChartInteraction(
       const candleDelta = deltaX * candlesPerPixel * 2
       const newOffset = panStart.offset + candleDelta
 
-      // Allow panning in both directions
-      // Use actualCandlesInView to account for zoom level
+      // POLICY: Allow panning back in time (positive offset)
+      // Prevent future whitespace (no negative offset)
       const maxOffset = Math.max(0, data.length - actualCandlesInView)
-      const minOffset = -actualCandlesInView // Allow panning into future by full screen width
+      const minOffset = 0 // No future whitespace
       setPanOffset(Math.max(minOffset, Math.min(maxOffset, newOffset)))
     }
     setMousePos({ x: t.clientX - rect.left, y: t.clientY - rect.top })

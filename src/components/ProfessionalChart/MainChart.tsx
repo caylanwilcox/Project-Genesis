@@ -17,6 +17,7 @@ interface MainChartProps {
   entryPoint?: number
   targets?: number[]
   dataTimeframe: string
+  displayTimeframe?: string
   onOverlayTagsUpdate: (tags: PriceTag[]) => void
   mousePos: { x: number; y: number } | null
   isPanning: boolean
@@ -31,6 +32,7 @@ export const MainChart: React.FC<MainChartProps> = ({
   entryPoint,
   targets = [],
   dataTimeframe,
+  displayTimeframe,
   onOverlayTagsUpdate,
   mousePos,
   isPanning,
@@ -74,10 +76,11 @@ export const MainChart: React.FC<MainChartProps> = ({
 
     const { minPrice, maxPrice, priceRange } = calculatePriceRange(visibleData, priceScale)
 
-    // baseWidth should always be based on zoom level, not data availability
-    // This allows the chart to show empty space when zoomed out beyond available data
+    // POLICY: Detect auto-fit mode (timeScale=1.0) and use actual data length
+    // Manual mode: use fixed base of 100 candles with zoom
+    const isAutoFit = timeScale === 1.0 && visibleRange.start === 0 && visibleRange.end === data.length
     const baseCandlesInView = 100
-    const baseWidth = baseCandlesInView / timeScale
+    const baseWidth = isAutoFit ? visibleData.length : baseCandlesInView / timeScale
 
     setChartDimensions({
       chartWidth,
@@ -91,7 +94,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     })
 
     drawPriceGrid({ ctx, rect, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, isNarrow, gutter })
-    drawTimeGrid(ctx, volCtx, rect, volRect, padding, chartWidth, chartHeight, volChartHeight, visibleData, dataTimeframe, isNarrow)
+    drawTimeGrid(ctx, volCtx, rect, volRect, padding, chartWidth, chartHeight, volChartHeight, visibleData, dataTimeframe, displayTimeframe, isNarrow)
 
     drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth)
 
@@ -99,7 +102,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0
     const candleWidth = chartWidth / baseWidth
 
-    drawVolumeBars(volCtx, visibleData, candleWidth, volChartHeight, maxVolume, padding)
+    drawVolumeBars(volCtx, visibleData, candleWidth, volChartHeight, maxVolume, padding, chartWidth)
 
     const tags = drawPriceLines(ctx, rect, padding, chartHeight, minPrice, maxPrice, priceRange, stopLoss, entryPoint, targets)
 

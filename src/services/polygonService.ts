@@ -182,7 +182,8 @@ class PolygonService {
     limit: number = 100,
     displayTimeframe?: string
   ): Promise<NormalizedChartData[]> {
-    const cacheKey = `aggs_${ticker}_${timeframe}_${limit}`;
+    // Include displayTimeframe in cache key to ensure different requests for 3M, 6M, YTD, etc.
+    const cacheKey = `aggs_${ticker}_${timeframe}_${limit}_${displayTimeframe || 'default'}`;
 
     return this.queueRequest(cacheKey, async () => {
       try {

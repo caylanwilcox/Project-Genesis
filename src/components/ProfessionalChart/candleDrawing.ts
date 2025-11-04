@@ -11,12 +11,20 @@ export function drawCandles(
   priceRange: number,
   baseWidth: number = 100 // Use fixed base width for consistent spacing
 ) {
-  // Use baseWidth (default 100) instead of visibleData.length to create white space
-  const candleWidth = chartWidth / baseWidth
+  if (visibleData.length === 0) return
+
+  // Use the LARGER of baseWidth or actual data length to ensure candles fit
+  // This prevents candles from running off the chart when auto-fitting
+  const effectiveWidth = Math.max(baseWidth, visibleData.length)
+  const candleWidth = chartWidth / effectiveWidth
   const candleSpacing = candleWidth * 0.8
 
   visibleData.forEach((candle, i) => {
     const x = padding.left + i * candleWidth + candleWidth / 2
+
+    // Ensure candle stays within chart boundaries
+    if (x < padding.left || x > padding.left + chartWidth) return
+
     const isGreen = candle.close >= candle.open
 
     const highY = padding.top + ((maxPrice - candle.high) / priceRange) * chartHeight
@@ -45,12 +53,19 @@ export function drawVolumeBars(
   candleWidth: number,
   volChartHeight: number,
   maxVolume: number,
-  padding: any
+  padding: any,
+  chartWidth?: number
 ) {
+  if (visibleData.length === 0) return
+
   const volBarMaxHeight = volChartHeight - 25
 
   visibleData.forEach((candle, i) => {
     const x = padding.left + i * candleWidth + candleWidth / 2
+
+    // Ensure volume bar stays within chart boundaries
+    if (chartWidth && (x < padding.left || x > padding.left + chartWidth)) return
+
     const isGreen = candle.close >= candle.open
 
     // Ensure volume is a valid number

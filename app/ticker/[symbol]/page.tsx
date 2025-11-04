@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic'
 import { usePolygonData, usePolygonSnapshot } from '@/hooks/usePolygonData'
 import { polygonService } from '@/services/polygonService'
 import { NormalizedChartData, Timeframe } from '@/types/polygon'
+import { resolveDisplayToData, recommendedRefreshMs, recommendedBarLimit } from '@/utils/timeframePolicy'
 
 const ProfessionalChart = dynamic(() => import('@/components/ProfessionalChart').then(m => m.ProfessionalChart), {
   ssr: false,
@@ -33,37 +34,12 @@ export default function TickerPage() {
   const [ticker, setTicker] = useState<TickerDetails | null>(null)
   const [livePrice, setLivePrice] = useState(0)
   const [sessionOpen, setSessionOpen] = useState<number | null>(null)
-  const [timeframe, setTimeframe] = useState<Timeframe>('15m') // Start with 15m to match chart's 1D default
-  const [displayTimeframe, setDisplayTimeframe] = useState<string>('1D') // Track display timeframe for limit calculation
+  const [displayTimeframe, setDisplayTimeframe] = useState<string>('1D')
+  const initialResolved = resolveDisplayToData('1D')
+  const [timeframe, setTimeframe] = useState<Timeframe>(initialResolved.timeframe)
 
-  // Calculate how many bars to fetch based on display timeframe
-  const getBarLimit = (tf: Timeframe, displayTf: string): number => {
-    // For minute timeframes, fetch enough to cover the display range
-    if (tf === '1m') return 390 // Full trading day (6.5 hours * 60 min)
-    if (tf === '5m') return 390 // 5 days worth
-    if (tf === '15m') return 390 // Multiple days
-    if (tf === '30m') return 390
-    if (tf === '1h') {
-      // If showing 1M display range, fetch ~22 trading days of 1h bars
-      if (displayTf === '1M') return 22 * 6.5 // ~143 bars
-      return 390
-    }
-    if (tf === '4h') return 390
-
-    // For daily and longer timeframes, fetch based on display range
-    if (tf === '1d') {
-      if (displayTf === '1M') return 30
-      if (displayTf === '3M') return 90
-      if (displayTf === '6M') return 180
-      if (displayTf === 'YTD') return 300 // Up to 1 year
-      if (displayTf === '1Y') return 365
-      return 200 // Default
-    }
-    if (tf === '1w') return 260 // ~5 years
-    if (tf === '1M') return 120 // ~10 years
-
-    return 200
-  }
+  // Centralized policy determines bar limits
+  const getBarLimit = (tf: Timeframe, displayTf: string): number => recommendedBarLimit(tf, displayTf)
 
   // Fetch real polygon.io data with dynamic limit based on timeframe
   const {
@@ -78,7 +54,7 @@ export default function TickerPage() {
     timeframe,
     limit: getBarLimit(timeframe, displayTimeframe),
     autoRefresh: true,
-    refreshInterval: timeframe === '1m' ? 10000 : 60000, // faster on 1m
+    refreshInterval: recommendedRefreshMs(timeframe),
     displayTimeframe, // Pass display timeframe for accurate date range calculation
   })
 

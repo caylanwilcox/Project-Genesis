@@ -3,7 +3,8 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react'
 import styles from './ProfessionalChart.module.css'
 import tagStyles from './ChartYAxisTags.module.css'
-import { ProfessionalChartProps, TIMEFRAME_CONFIGS } from './ProfessionalChart/types'
+import { ProfessionalChartProps } from './ProfessionalChart/types'
+import { resolveDisplayToData, intervalLabelToTimeframe } from '@/utils/timeframePolicy'
 import { useChartData, useVisibleRange, useFullscreen, useCurrentTime } from './ProfessionalChart/hooks'
 import { useChartInteraction } from './ProfessionalChart/useChartInteraction'
 import { useChartScaling } from './ProfessionalChart/useChartScaling'
@@ -26,15 +27,15 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartMainAreaRef = useRef<HTMLDivElement>(null)
   const [timeframe, setTimeframe] = useState('1D')
-  const [interval, setInterval] = useState('15 min')
+  const [interval, setInterval] = useState('1 hour')
   const [showIntervalDropdown, setShowIntervalDropdown] = useState(false)
-  const [panOffset, setPanOffset] = useState(-15) // Start with 15% white space on right
-  const [dataTimeframe, setDataTimeframe] = useState('15m')
+  const [panOffset, setPanOffset] = useState(0) // Start in auto-fit mode (no offset)
+  const [dataTimeframe, setDataTimeframe] = useState('1h')
   const [overlayTags, setOverlayTags] = useState<PriceTag[]>([])
 
   const { data } = useChartData(externalData, currentPrice, onDataUpdate)
   const { priceScale, setPriceScale, timeScale, setTimeScale } = useChartScaling()
-  const visibleRange = useVisibleRange(data, panOffset, timeScale)
+  const visibleRange = useVisibleRange(data, panOffset, timeScale, timeframe, dataTimeframe)
   const { isPanning, mousePos, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, handleTouchStart, handleTouchMove, handleTouchEnd } = useChartInteraction(data, panOffset, setPanOffset, timeScale, setTimeScale)
   const { isFullscreen, toggleFullscreen } = useFullscreen(chartContainerRef)
   const currentTime = useCurrentTime()
@@ -84,18 +85,18 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   }, [setTimeScale])
 
   const handleTimeframeClick = useCallback((tf: string) => {
-    setTimeframe(tf); setPriceScale(1.0); setTimeScale(1.0); setPanOffset(-15) // Reset zoom and whitespace
-    const mapped = TIMEFRAME_CONFIGS.dataTimeframeMap[tf]
-    const intervalMapped = TIMEFRAME_CONFIGS.intervalDisplayMap[tf]
-    if (intervalMapped) setInterval(intervalMapped)
-    if (mapped) { setDataTimeframe(mapped); onTimeframeChange?.(mapped, tf) }
+    setTimeframe(tf); setPriceScale(1.0); setTimeScale(1.0); setPanOffset(0)
+    const resolved = resolveDisplayToData(tf)
+    setInterval(resolved.intervalLabel)
+    setDataTimeframe(resolved.timeframe)
+    onTimeframeChange?.(resolved.timeframe, tf)
   }, [onTimeframeChange, setPriceScale, setTimeScale])
 
   const handleIntervalChange = useCallback((newInterval: string) => {
-    setInterval(newInterval); setShowIntervalDropdown(false); setPanOffset(-15) // Reset whitespace
-    const mapped = TIMEFRAME_CONFIGS.intervalToTimeframeMap[newInterval]
+    setInterval(newInterval); setShowIntervalDropdown(false); setTimeScale(1.0); setPanOffset(0)
+    const mapped = intervalLabelToTimeframe(newInterval)
     if (mapped) { setDataTimeframe(mapped); onTimeframeChange?.(mapped, 'Custom') }
-  }, [onTimeframeChange])
+  }, [onTimeframeChange, setTimeScale])
 
   return (
     <div ref={chartContainerRef} className={styles.chartContainer}>
@@ -110,7 +111,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         onTouchMove={(e) => handleTouchMove(e, e.currentTarget.getBoundingClientRect())} onTouchEnd={handleTouchEnd}>
         <MainChart data={data} visibleRange={visibleRange} priceScale={priceScale} timeScale={timeScale}
           stopLoss={stopLoss} entryPoint={entryPoint} targets={targets} dataTimeframe={dataTimeframe}
-          onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} />
+          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} />
         <div className={tagStyles.yAxisTagsContainer}>
           {overlayTags.map((tag, idx) => (
             <div key={idx} className={`${tagStyles.yAxisTag} ${tagStyles[`yAxisTag--${tag.kind}`]}`} style={{ top: `${tag.y - 11}px` }}>

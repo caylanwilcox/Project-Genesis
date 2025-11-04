@@ -639,7 +639,7 @@ Replace UVXY with DIA for better results.
 
 ## Conclusion: What Matters Most?
 
-### **Top 5 Most Important Weeks (In Order):**
+### **Top 5 Most Important Weeks (1In Order):**
 
 1. **Week 2** (🔴 10/10) - Data + Features = Fuel for ML
 2. **Week 1** (🔴 10/10) - Database = Foundation for everything
@@ -659,3 +659,110 @@ Weeks: 1, 2, 3, 4, 5, 10, 11, 12
 ---
 
 **Next Step:** Choose your timeline (6-week fast, 8-week balanced, or 12-week complete) and let's start Week 1!
+12-Week ML Implementation: Stakeholder Deliverables & Expectations
+This document outlines the week-by-week deliverables and expectations for the 12-week ML implementation plan. Each week is clearly marked with:
+- Importance level (Critical, High, Medium, Low)
+- Deliverables that must be completed
+- Expectations for outcomes and progress
+
+This ensures all stakeholders understand the timeline, milestones, and accountability at each stage.
+Week 1: Database & Infrastructure Setup (🔴 CRITICAL)
+Deliverables:
+•	• PostgreSQL + TimescaleDB installed and running
+•	• Database schema finalized with indexes
+•	• Data integrity checks implemented
+•	• Able to insert 100K rows in <5 seconds
+•	• Able to query 1 year of data in <500ms
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 2: Real-Time Data Pipeline & Feature Engineering (🔴 CRITICAL)
+Deliverables:
+•	• 2+ years of historical data ingested
+•	• ETL pipeline built and running
+•	• 100+ engineered features stored in DB
+•	• No missing or corrupt data bars
+•	• Feature computation <5 minutes per ticker
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 3: SPY Model Training (🔴 CRITICAL)
+Deliverables:
+•	• SPY models trained across all horizons (1m, 5m, 15m, 1h, 4h, 1d)
+•	• Accuracy >60% achieved
+•	• Feature importance analysis completed
+•	• Training runs completed without OOM errors
+•	• Inference speed <50ms per prediction
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 4: SPY Backtesting & Deployment (🟡 HIGH)
+Deliverables:
+•	• Backtest completed with Sharpe ratio >1.5
+•	• Max drawdown <20% validated
+•	• Positive return >10% annualized
+•	• Models deployed to inference API
+•	• Frontend connected to SPY predictions
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 5: QQQ Training (🟡 HIGH)
+Deliverables:
+•	• QQQ models trained across all horizons
+•	• Accuracy within 3% of SPY models
+•	• Training pipeline reused from SPY
+•	• Feature importance comparison completed
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 6: QQQ Backtesting (🟢 MEDIUM)
+Deliverables:
+•	• QQQ backtest Sharpe ratio >1.3
+•	• Results benchmarked against SPY
+•	• Deployed to production inference API
+•	• Frontend integrated with QQQ predictions
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 7: IWM Training (🟢 MEDIUM)
+Deliverables:
+•	• IWM models trained on selected horizons
+•	• Accuracy >58% achieved
+•	• Correlation analysis with SPY/QQQ completed
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 8: IWM Backtesting (🟢 MEDIUM)
+Deliverables:
+•	• IWM backtest completed
+•	• Diversification analysis documented
+•	• Deployment readiness verified
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 9: UVXY Training (⚪ LOW / OPTIONAL)
+Deliverables:
+•	• UVXY models trained (optional)
+•	• Accuracy >60% validated (if possible)
+•	• Decision made: keep or replace with DIA
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 10: System Integration & Advanced Features (🟡 HIGH)
+Deliverables:
+•	• Ensemble aggregation implemented
+•	• Market regime detection operational
+•	• Calibration curves generated
+•	• Signal quality filter tested
+•	• Accuracy improvement >3% achieved
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 11: Feedback Loop, Monitoring & Optimization (🔴 CRITICAL)
+Deliverables:
+•	• Prediction tracking enabled
+•	• Rolling accuracy metrics live
+•	• Alerts configured for accuracy <55%
+•	• Auto-retraining scheduled weekly
+•	• Monitoring dashboard (Grafana/custom) live
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.
+Week 12: Production Deployment (🟡 HIGH)
+Deliverables:
+•	• System deployed to cloud (Railway/Render/AWS)
+•	• Load tested for 100+ concurrent users
+•	• SSL/TLS certificates configured
+•	• Authentication (JWT) implemented
+•	• API documentation and runbook completed
+Expectations:
+All deliverables must be completed and validated by the end of this week. Any risks, delays, or blockers must be communicated immediately to stakeholders.

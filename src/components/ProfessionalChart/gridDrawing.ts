@@ -49,6 +49,7 @@ export function drawTimeGrid(
   volChartHeight: number,
   visibleData: CandleData[],
   dataTimeframe: string,
+  displayTimeframe: string | undefined,
   isNarrow: boolean
 ) {
   if (visibleData.length === 0) return
@@ -65,7 +66,7 @@ export function drawTimeGrid(
 
     const index = Math.min(visibleData.length - 1, Math.round((i / numLabels) * (visibleData.length - 1)))
     const ts = new Date(visibleData[index].time)
-    const label = formatTimeLabel(ts, dataTimeframe)
+    const label = formatTimeLabel(ts, dataTimeframe, displayTimeframe)
     const fontSize = isNarrow ? 10 : 11
     volCtx.font = `bold ${fontSize}px monospace`
     volCtx.textAlign = 'center'; volCtx.textBaseline = 'top'
@@ -80,10 +81,13 @@ export function drawTimeGrid(
   ctx.setLineDash([]); volCtx.setLineDash([])
 }
 
-function formatTimeLabel(ts: Date, dataTimeframe: string): string {
+function formatTimeLabel(ts: Date, dataTimeframe: string, displayTimeframe?: string): string {
   if (dataTimeframe === '1M') {
     return ts.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'America/New_York' })
   } else if (dataTimeframe === '1w' || dataTimeframe === '1d') {
+    return ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
+  } else if (displayTimeframe === '5D' && dataTimeframe === '1h') {
+    // For 5D timeframe with 1h bars, show date number
     return ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
   } else {
     return ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })

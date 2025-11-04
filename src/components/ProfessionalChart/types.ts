@@ -56,24 +56,24 @@ export const TIMEFRAME_CONFIGS = {
   timeframes: ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'All'],
   intervals: ['1 min', '5 min', '15 min', '30 min', '1 hour', '1 day', '1 week', '1 month'],
   dataTimeframeMap: {
-    '1D': '15m',
-    '5D': '1h',
-    '1M': '1h',
-    '3M': '1d',
-    '6M': '1d',
-    'YTD': '1d',
-    '1Y': '1d',
-    '5Y': '1w',
-    'All': '1M',
+    '1D': '1h',    // 1 day: 1-hour bars (~6-7 bars in trading day)
+    '5D': '1h',    // 5 days: 1-hour bars (~32 bars)
+    '1M': '4h',    // 1 month: 4-hour bars (~44 bars)
+    '3M': '1d',    // 3 months: daily bars (~63 bars)
+    '6M': '1d',    // 6 months: daily bars (~126 bars) - same interval but MORE data
+    'YTD': '1d',   // Year-to-date: daily bars (varies by date) - same interval, different range
+    '1Y': '1d',    // 1 year: daily bars (~252 bars) - MOST daily bars
+    '5Y': '1w',    // 5 years: weekly bars (~260 bars) - different granularity
+    'All': '1M',   // All time: monthly bars - smoothest view
   } as TimeframeMap,
   intervalDisplayMap: {
-    '1D': '15 min',
+    '1D': '1 hour',
     '5D': '1 hour',
-    '1M': '1 hour',
+    '1M': '4 hour',
     '3M': '1 day',
     '6M': '1 day',
     'YTD': '1 day',
-    '1Y': '1 day',
+    '1Y': '1 day',   // Changed back to daily
     '5Y': '1 week',
     'All': '1 month',
   } as TimeframeMap,

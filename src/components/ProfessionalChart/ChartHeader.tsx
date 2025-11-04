@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Activity, TrendingUp, Maximize2, Minimize2, Settings, ChevronDown } from 'lucide-react'
-import { TIMEFRAME_CONFIGS } from './types'
+import { DISPLAY_TIMEFRAMES, INTERVAL_LABELS } from '@/utils/timeframePolicy'
 
 interface ChartHeaderProps {
   symbol: string
@@ -35,7 +35,7 @@ export function ChartHeader({
 
       <div className="flex items-center gap-2">
         <div className="flex gap-1">
-          {TIMEFRAME_CONFIGS.timeframes.map((tf) => (
+          {DISPLAY_TIMEFRAMES.map((tf) => (
             <button
               key={tf}
               onClick={() => onTimeframeClick(tf)}
@@ -60,7 +60,7 @@ export function ChartHeader({
           </button>
           {showIntervalDropdown && (
             <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 min-w-[120px]">
-              {TIMEFRAME_CONFIGS.intervals.map((int) => (
+              {INTERVAL_LABELS.map((int) => (
                 <button
                   key={int}
                   onClick={() => onIntervalChange(int)}
