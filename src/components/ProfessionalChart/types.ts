@@ -7,6 +7,8 @@ export interface ProfessionalChartProps {
   data?: CandleData[]
   onDataUpdate?: (data: CandleData[]) => void
   onTimeframeChange?: (tf: string, displayTf: string) => void
+  showFvg?: boolean
+  onFvgCountChange?: (count: number) => void
 }
 
 export interface CandleData {

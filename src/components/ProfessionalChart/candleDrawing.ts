@@ -17,10 +17,13 @@ export function drawCandles(
   // This prevents candles from running off the chart when auto-fitting
   const effectiveWidth = Math.max(baseWidth, visibleData.length)
   const candleWidth = chartWidth / effectiveWidth
+  // When zoomed out (effectiveWidth > visibleData.length), shift candles right so the last candle
+  // aligns with the right edge instead of leaving a blank margin on the right.
+  const leftOffset = (effectiveWidth - visibleData.length) * candleWidth
   const candleSpacing = candleWidth * 0.8
 
   visibleData.forEach((candle, i) => {
-    const x = padding.left + i * candleWidth + candleWidth / 2
+    const x = padding.left + leftOffset + i * candleWidth + candleWidth / 2
 
     // Ensure candle stays within chart boundaries
     if (x < padding.left || x > padding.left + chartWidth) return
@@ -60,8 +63,12 @@ export function drawVolumeBars(
 
   const volBarMaxHeight = volChartHeight - 25
 
+  // Reconstruct effective layout to keep alignment with candles
+  const effectiveWidth = chartWidth ? Math.max(chartWidth / candleWidth, visibleData.length) : visibleData.length
+  const leftOffset = chartWidth ? (effectiveWidth - visibleData.length) * candleWidth : 0
+
   visibleData.forEach((candle, i) => {
-    const x = padding.left + i * candleWidth + candleWidth / 2
+    const x = padding.left + leftOffset + i * candleWidth + candleWidth / 2
 
     // Ensure volume bar stays within chart boundaries
     if (chartWidth && (x < padding.left || x > padding.left + chartWidth)) return

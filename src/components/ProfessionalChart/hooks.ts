@@ -93,7 +93,24 @@ export function useVisibleRange(
     // Determine default bars per display timeframe
     const getDefaultBarsForView = (display?: string, dataTf?: string): number => {
       if (!display || !dataTf) return 100
-      if (display === '1D' && (dataTf === '15m' || dataTf === '5m' || dataTf === '1m')) return 30 // ~trading day
+
+      // 1-minute chart configurations - show all available data
+      if (dataTf === '1m') {
+        if (display === '1D') return Math.min(data.length, 390) // Full trading day (6.5 hours)
+        if (display === '5D') return Math.min(data.length, 1950) // 5 trading days
+        if (display === '1M') return Math.min(data.length, 8190) // ~21 trading days
+        return Math.min(data.length, 390) // Default to 1 day for other timeframes
+      }
+
+      // 5-minute chart configurations
+      if (dataTf === '5m') {
+        if (display === '1D') return Math.min(data.length, 78) // 6.5 hours
+        if (display === '5D') return Math.min(data.length, 390) // 5 days
+        return 30
+      }
+
+      // Other timeframe configurations
+      if (display === '1D' && dataTf === '15m') return 30 // ~trading day
       if (display === '5D' && dataTf === '1h') return 40
       if (display === '1M' && dataTf === '4h') return 44
       if (display === '3M' && dataTf === '1d') return 63

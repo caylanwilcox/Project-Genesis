@@ -7,6 +7,7 @@ import { drawPriceGrid, drawTimeGrid } from './gridDrawing'
 import { drawCandles, drawVolumeBars } from './candleDrawing'
 import { drawPriceLines, drawCurrentPriceLine, PriceTag } from './priceLines'
 import { Crosshair } from './Crosshair'
+import { detectFvgPatterns, drawFvgPatterns } from './fvgDrawing'
 
 interface MainChartProps {
   data: CandleData[]
@@ -21,6 +22,9 @@ interface MainChartProps {
   onOverlayTagsUpdate: (tags: PriceTag[]) => void
   mousePos: { x: number; y: number } | null
   isPanning: boolean
+  showFvg?: boolean
+  onFvgCountChange?: (count: number) => void
+  priceOffset?: number
 }
 
 export const MainChart: React.FC<MainChartProps> = ({
@@ -36,6 +40,9 @@ export const MainChart: React.FC<MainChartProps> = ({
   onOverlayTagsUpdate,
   mousePos,
   isPanning,
+  showFvg = false,
+  onFvgCountChange,
+  priceOffset = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const volumeCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -74,7 +81,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     const visibleData = data.slice(visibleRange.start, visibleRange.end)
     if (visibleData.length === 0) return
 
-    const { minPrice, maxPrice, priceRange } = calculatePriceRange(visibleData, priceScale)
+    const { minPrice, maxPrice, priceRange } = calculatePriceRange(visibleData, priceScale, priceOffset)
 
     // POLICY: Detect auto-fit mode (timeScale=1.0) and use actual data length
     // Manual mode: use fixed base of 100 candles with zoom
@@ -104,6 +111,24 @@ export const MainChart: React.FC<MainChartProps> = ({
 
     drawVolumeBars(volCtx, visibleData, candleWidth, volChartHeight, maxVolume, padding, chartWidth)
 
+    // Draw FVG patterns if enabled
+    if (showFvg && visibleData.length >= 3) {
+      // Adjust gap thresholds based on timeframe
+      const options = dataTimeframe === '1m' || dataTimeframe === '5m'
+        ? { minGapPct: 0.01, maxGapPct: 1.0, recentOnly: false } // Lower thresholds for minute charts
+        : { minGapPct: 0.1, maxGapPct: 5.0, recentOnly: false }  // Standard thresholds for hourly+ charts
+
+      const fvgPatterns = detectFvgPatterns(visibleData, options)
+      drawFvgPatterns(ctx, fvgPatterns, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, visibleRange.start)
+
+      // Notify parent of FVG count
+      if (onFvgCountChange) {
+        onFvgCountChange(fvgPatterns.length)
+      }
+    } else if (!showFvg && onFvgCountChange) {
+      onFvgCountChange(0)
+    }
+
     const tags = drawPriceLines(ctx, rect, padding, chartHeight, minPrice, maxPrice, priceRange, stopLoss, entryPoint, targets)
 
     const isCurrentPriceVisible = visibleRange.end >= data.length
@@ -120,7 +145,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     volCtx.fillText(formatVolume(maxVolume), volLabelX, volChartHeight - 6)
 
     onOverlayTagsUpdate(tags)
-  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate])
+  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate, showFvg, priceOffset])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

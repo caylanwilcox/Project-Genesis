@@ -85,9 +85,10 @@ export const XAxisGutter: React.FC<XAxisGutterProps> = ({ timeScale, onTimeScale
   return (
     <div
       ref={gutterRef}
-      className={`absolute bottom-0 left-0 right-20 h-24 z-20 cursor-ew-resize transition-all duration-200 ${
+      className={`absolute bottom-0 left-0 h-24 z-20 cursor-ew-resize transition-all duration-200 ${
         isDragging ? 'bg-blue-500/10' : isHovered ? 'bg-white/5' : 'bg-transparent'
       }`}
+      style={{ right: 'var(--chart-y-axis-gutter)' }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       onMouseEnter={() => setIsHovered(true)}

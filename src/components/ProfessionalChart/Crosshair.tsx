@@ -52,7 +52,10 @@ export const Crosshair: React.FC<CrosshairProps> = ({
     // Calculate which candle we're hovering over
     const candleWidth = chartWidth / baseWidth
     const relativeX = mousePos.x - padding.left
-    const candleIndex = Math.floor(relativeX / candleWidth)
+    const effectiveWidth = Math.max(baseWidth, visibleData.length)
+    const adjustedCandleWidth = chartWidth / effectiveWidth
+    const leftOffset = (effectiveWidth - visibleData.length) * adjustedCandleWidth
+    const candleIndex = Math.floor((relativeX - leftOffset) / adjustedCandleWidth)
 
     // Check if we're within bounds
     if (candleIndex < 0 || candleIndex >= visibleData.length) return
@@ -61,7 +64,7 @@ export const Crosshair: React.FC<CrosshairProps> = ({
     if (!candle) return
 
     // Snap to center of candle
-    const snapX = padding.left + candleIndex * candleWidth + candleWidth / 2
+    const snapX = padding.left + leftOffset + candleIndex * adjustedCandleWidth + adjustedCandleWidth / 2
 
     // Calculate price at mouse Y position
     const relativeY = mousePos.y - padding.top

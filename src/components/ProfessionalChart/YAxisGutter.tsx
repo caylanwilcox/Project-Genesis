@@ -85,9 +85,10 @@ export const YAxisGutter: React.FC<YAxisGutterProps> = ({ priceScale, onPriceSca
   return (
     <div
       ref={gutterRef}
-      className={`absolute right-0 top-0 bottom-20 w-20 z-20 cursor-ns-resize transition-all duration-200 ${
+      className={`absolute right-0 top-0 bottom-20 z-20 cursor-ns-resize transition-all duration-200 ${
         isDragging ? 'bg-blue-500/10' : isHovered ? 'bg-white/5' : 'bg-transparent'
       }`}
+      style={{ width: 'var(--chart-y-axis-gutter)' }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       onMouseEnter={() => setIsHovered(true)}

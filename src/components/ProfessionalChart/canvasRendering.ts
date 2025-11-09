@@ -32,7 +32,7 @@ export function calculatePadding(parentWidth: number) {
   return { padding, gutter, isNarrow }
 }
 
-export function calculatePriceRange(visibleData: CandleData[], priceScale: number) {
+export function calculatePriceRange(visibleData: CandleData[], priceScale: number, priceOffset: number = 0) {
   const highs = visibleData.map(d => d.high)
   const lows = visibleData.map(d => d.low)
   const visibleMin = Math.min(...lows)
@@ -43,8 +43,10 @@ export function calculatePriceRange(visibleData: CandleData[], priceScale: numbe
   const rangedMax = visibleMax + margin
   const centered = (rangedMin + rangedMax) / 2
   const scaledRange = (rangedMax - rangedMin) / priceScale
-  const minPrice = centered - scaledRange / 2
-  const maxPrice = centered + scaledRange / 2
+
+  // Apply vertical offset
+  const minPrice = centered - scaledRange / 2 + priceOffset
+  const maxPrice = centered + scaledRange / 2 + priceOffset
   const priceRange = Math.max(1e-6, maxPrice - minPrice)
 
   return { minPrice, maxPrice, priceRange }

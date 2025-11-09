@@ -37,6 +37,8 @@ export default function TickerPage() {
   const [displayTimeframe, setDisplayTimeframe] = useState<string>('1D')
   const initialResolved = resolveDisplayToData('1D')
   const [timeframe, setTimeframe] = useState<Timeframe>(initialResolved.timeframe)
+  const [showFvg, setShowFvg] = useState(false)
+  const [fvgCount, setFvgCount] = useState(0)
 
   // Centralized policy determines bar limits
   const getBarLimit = (tf: Timeframe, displayTf: string): number => recommendedBarLimit(tf, displayTf)
@@ -478,7 +480,7 @@ export default function TickerPage() {
 
       {/* Price Chart Section */}
       <section className="bg-gray-900 border-b border-gray-800 py-4">
-        <div className="max-w-7xl mx-auto px-4">
+        <div className="w-full px-2 sm:px-4">
           {polygonError && chartData.length === 0 && (
             <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
               <div className="flex items-center gap-2">
@@ -499,7 +501,26 @@ export default function TickerPage() {
               </div>
             </div>
           )}
-          <div className="max-w-[95%] mx-auto relative">
+          <div className="w-full mx-auto relative" style={{ height: '640px' }}>
+            {/* FVG Toggle Button */}
+            <div className="absolute top-14 left-2 z-10 flex items-center gap-2">
+              {showFvg && fvgCount > 0 && (
+                <div className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500">
+                  {fvgCount} Pattern{fvgCount !== 1 ? 's' : ''} Found
+                </div>
+              )}
+              <button
+                onClick={() => setShowFvg(!showFvg)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                  showFvg
+                    ? 'bg-green-500/20 text-green-400 border border-green-500 hover:bg-green-500/30'
+                    : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-700/50'
+                }`}
+              >
+                {showFvg ? '✓ FVG Detection ON' : 'FVG Detection OFF'}
+              </button>
+            </div>
+
             <ProfessionalChart
               symbol={ticker.symbol}
               currentPrice={livePrice}
@@ -511,6 +532,8 @@ export default function TickerPage() {
               ]}
               entryPoint={livePrice}
               data={chartData.length > 0 ? chartData : undefined}
+              showFvg={showFvg}
+              onFvgCountChange={setFvgCount}
               onTimeframeChange={(tf, displayTf) => {
                 console.log('[TickerPage] Timeframe changed to:', tf, 'Display:', displayTf);
                 setTimeframe(tf as any);

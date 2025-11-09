@@ -22,7 +22,9 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   entryPoint,
   data: externalData,
   onDataUpdate,
-  onTimeframeChange
+  onTimeframeChange,
+  showFvg = false,
+  onFvgCountChange
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartMainAreaRef = useRef<HTMLDivElement>(null)
@@ -30,13 +32,14 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   const [interval, setInterval] = useState('1 hour')
   const [showIntervalDropdown, setShowIntervalDropdown] = useState(false)
   const [panOffset, setPanOffset] = useState(0) // Start in auto-fit mode (no offset)
+  const [priceOffset, setPriceOffset] = useState(0) // Vertical panning offset
   const [dataTimeframe, setDataTimeframe] = useState('1h')
   const [overlayTags, setOverlayTags] = useState<PriceTag[]>([])
 
   const { data } = useChartData(externalData, currentPrice, onDataUpdate)
   const { priceScale, setPriceScale, timeScale, setTimeScale } = useChartScaling()
   const visibleRange = useVisibleRange(data, panOffset, timeScale, timeframe, dataTimeframe)
-  const { isPanning, mousePos, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, handleTouchStart, handleTouchMove, handleTouchEnd } = useChartInteraction(data, panOffset, setPanOffset, timeScale, setTimeScale)
+  const { isPanning, mousePos, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, handleTouchStart, handleTouchMove, handleTouchEnd } = useChartInteraction(data, panOffset, setPanOffset, timeScale, setTimeScale, priceOffset, setPriceOffset)
   const { isFullscreen, toggleFullscreen } = useFullscreen(chartContainerRef)
   const currentTime = useCurrentTime()
 
@@ -47,13 +50,17 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
 
     let rafId: number | null = null
     let pendingZoom = 1
+    let mouseX: number | null = null
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault()
       e.stopPropagation()
 
+      // Capture mouse position for zoom focus
+      const rect = chartArea.getBoundingClientRect()
+      mouseX = e.clientX - rect.left
+
       // Accumulate zoom changes for smooth animation
-      // Use smaller exponent for finer control
       const sensitivity = 0.0015 // Adjust this for zoom speed (higher = faster)
       const zoomDelta = -e.deltaY * sensitivity
       pendingZoom *= Math.exp(zoomDelta)
@@ -65,11 +72,29 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
 
       // Apply zoom on next frame for smooth rendering
       rafId = requestAnimationFrame(() => {
-        setTimeScale((prev) => {
-          const newScale = prev * pendingZoom
-          pendingZoom = 1 // Reset accumulator
-          return Math.max(0.2, Math.min(5, newScale))
-        })
+        const oldScale = timeScale
+        const newScale = Math.max(0.2, Math.min(5, oldScale * pendingZoom))
+
+        // Calculate cursor position as percentage of chart width
+        if (mouseX !== null && rect) {
+          const chartWidth = rect.width
+          const cursorRatio = mouseX / chartWidth // 0 = left edge, 1 = right edge
+
+          // Calculate how many candles are visible before/after zoom
+          const baseCandlesInView = 100
+          const oldVisibleCandles = baseCandlesInView / oldScale
+          const newVisibleCandles = baseCandlesInView / newScale
+
+          // Adjust pan offset to keep cursor position stable
+          // The cursor should point to the same candle before and after zoom
+          const candleDifference = oldVisibleCandles - newVisibleCandles
+          const offsetAdjustment = candleDifference * cursorRatio
+
+          setPanOffset(prev => Math.max(0, prev + offsetAdjustment))
+        }
+
+        setTimeScale(newScale)
+        pendingZoom = 1 // Reset accumulator
         rafId = null
       })
     }
@@ -82,10 +107,10 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
       }
       chartArea.removeEventListener('wheel', handleWheel)
     }
-  }, [setTimeScale])
+  }, [setTimeScale, setPanOffset, timeScale])
 
   const handleTimeframeClick = useCallback((tf: string) => {
-    setTimeframe(tf); setPriceScale(1.0); setTimeScale(1.0); setPanOffset(0)
+    setTimeframe(tf); setPriceScale(1.0); setTimeScale(1.0); setPanOffset(0); setPriceOffset(0)
     const resolved = resolveDisplayToData(tf)
     setInterval(resolved.intervalLabel)
     setDataTimeframe(resolved.timeframe)
@@ -93,7 +118,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   }, [onTimeframeChange, setPriceScale, setTimeScale])
 
   const handleIntervalChange = useCallback((newInterval: string) => {
-    setInterval(newInterval); setShowIntervalDropdown(false); setTimeScale(1.0); setPanOffset(0)
+    setInterval(newInterval); setShowIntervalDropdown(false); setTimeScale(1.0); setPanOffset(0); setPriceOffset(0)
     const mapped = intervalLabelToTimeframe(newInterval)
     if (mapped) { setDataTimeframe(mapped); onTimeframeChange?.(mapped, 'Custom') }
   }, [onTimeframeChange, setTimeScale])
@@ -111,7 +136,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         onTouchMove={(e) => handleTouchMove(e, e.currentTarget.getBoundingClientRect())} onTouchEnd={handleTouchEnd}>
         <MainChart data={data} visibleRange={visibleRange} priceScale={priceScale} timeScale={timeScale}
           stopLoss={stopLoss} entryPoint={entryPoint} targets={targets} dataTimeframe={dataTimeframe}
-          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} />
+          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} showFvg={showFvg} onFvgCountChange={onFvgCountChange} priceOffset={priceOffset} />
         <div className={tagStyles.yAxisTagsContainer}>
           {overlayTags.map((tag, idx) => (
             <div key={idx} className={`${tagStyles.yAxisTag} ${tagStyles[`yAxisTag--${tag.kind}`]}`} style={{ top: `${tag.y - 11}px` }}>
