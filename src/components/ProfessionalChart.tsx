@@ -24,7 +24,9 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   onDataUpdate,
   onTimeframeChange,
   showFvg = false,
-  onFvgCountChange
+  onFvgCountChange,
+  onVisibleBarCountChange,
+  onLoadMoreData
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartMainAreaRef = useRef<HTMLDivElement>(null)
@@ -39,7 +41,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   const { data } = useChartData(externalData, currentPrice, onDataUpdate)
   const { priceScale, setPriceScale, timeScale, setTimeScale } = useChartScaling()
   const visibleRange = useVisibleRange(data, panOffset, timeScale, timeframe, dataTimeframe)
-  const { isPanning, mousePos, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, handleTouchStart, handleTouchMove, handleTouchEnd } = useChartInteraction(data, panOffset, setPanOffset, timeScale, setTimeScale, priceOffset, setPriceOffset)
+  const { isPanning, mousePos, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, handleTouchStart, handleTouchMove, handleTouchEnd } = useChartInteraction(data, panOffset, setPanOffset, timeScale, setTimeScale, priceOffset, setPriceOffset, onLoadMoreData)
   const { isFullscreen, toggleFullscreen } = useFullscreen(chartContainerRef)
   const currentTime = useCurrentTime()
 
@@ -136,7 +138,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         onTouchMove={(e) => handleTouchMove(e, e.currentTarget.getBoundingClientRect())} onTouchEnd={handleTouchEnd}>
         <MainChart data={data} visibleRange={visibleRange} priceScale={priceScale} timeScale={timeScale}
           stopLoss={stopLoss} entryPoint={entryPoint} targets={targets} dataTimeframe={dataTimeframe}
-          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} showFvg={showFvg} onFvgCountChange={onFvgCountChange} priceOffset={priceOffset} />
+          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} showFvg={showFvg} onFvgCountChange={onFvgCountChange} onVisibleBarCountChange={onVisibleBarCountChange} priceOffset={priceOffset} />
         <div className={tagStyles.yAxisTagsContainer}>
           {overlayTags.map((tag, idx) => (
             <div key={idx} className={`${tagStyles.yAxisTag} ${tagStyles[`yAxisTag--${tag.kind}`]}`} style={{ top: `${tag.y - 11}px` }}>

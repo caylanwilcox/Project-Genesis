@@ -8,12 +8,14 @@ export function useChartInteraction(
   timeScale: number,
   setTimeScale: (scale: number | ((prev: number) => number)) => void,
   priceOffset: number,
-  setPriceOffset: (offset: number) => void
+  setPriceOffset: (offset: number) => void,
+  onReachLeftEdge?: () => void
 ) {
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null)
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
   const [pinchStart, setPinchStart] = useState<{ distance: number; scale: number } | null>(null)
+  const [lastLoadTrigger, setLastLoadTrigger] = useState(0)
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     setIsPanning(true)
@@ -32,7 +34,20 @@ export function useChartInteraction(
 
       const maxOffset = Math.max(0, data.length - actualCandlesInView)
       const minOffset = 0
-      setPanOffset(Math.max(minOffset, Math.min(maxOffset, newOffsetX)))
+      const clampedOffset = Math.max(minOffset, Math.min(maxOffset, newOffsetX))
+      setPanOffset(clampedOffset)
+
+      // If user is trying to pan left beyond beginning (negative offset attempt)
+      // and we're already at the left edge, trigger callback to load more data
+      // Debounce to prevent multiple rapid triggers (2 second cooldown)
+      if (newOffsetX < -10 && clampedOffset === 0 && onReachLeftEdge) {
+        const now = Date.now()
+        if (now - lastLoadTrigger > 2000) {
+          console.log('[ChartInteraction] Reached left edge, triggering onReachLeftEdge callback')
+          setLastLoadTrigger(now)
+          onReachLeftEdge()
+        }
+      }
 
       // Vertical panning (price axis)
       const deltaY = e.clientY - panStart.y
@@ -47,7 +62,7 @@ export function useChartInteraction(
     } else {
       setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
     }
-  }, [isPanning, panStart, data.length, setPanOffset, timeScale, setPriceOffset])
+  }, [isPanning, panStart, data.length, setPanOffset, timeScale, setPriceOffset, onReachLeftEdge, lastLoadTrigger])
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false)
@@ -120,7 +135,19 @@ export function useChartInteraction(
 
       const maxOffset = Math.max(0, data.length - actualCandlesInView)
       const minOffset = 0
-      setPanOffset(Math.max(minOffset, Math.min(maxOffset, newOffsetX)))
+      const clampedOffset = Math.max(minOffset, Math.min(maxOffset, newOffsetX))
+      setPanOffset(clampedOffset)
+
+      // If user is trying to pan left beyond beginning, trigger callback to load more data
+      // Debounce to prevent multiple rapid triggers (2 second cooldown)
+      if (newOffsetX < -10 && clampedOffset === 0 && onReachLeftEdge) {
+        const now = Date.now()
+        if (now - lastLoadTrigger > 2000) {
+          console.log('[ChartInteraction] Reached left edge (touch), triggering onReachLeftEdge callback')
+          setLastLoadTrigger(now)
+          onReachLeftEdge()
+        }
+      }
 
       // Vertical panning
       const deltaY = t.clientY - panStart.y
@@ -130,7 +157,7 @@ export function useChartInteraction(
       setPriceOffset(newOffsetY)
     }
     setMousePos({ x: t.clientX - rect.left, y: t.clientY - rect.top })
-  }, [isPanning, panStart, data.length, setPanOffset, pinchStart, timeScale, setTimeScale, setPriceOffset])
+  }, [isPanning, panStart, data.length, setPanOffset, pinchStart, timeScale, setTimeScale, setPriceOffset, onReachLeftEdge, lastLoadTrigger])
 
   const handleTouchEnd = useCallback(() => {
     setIsPanning(false)

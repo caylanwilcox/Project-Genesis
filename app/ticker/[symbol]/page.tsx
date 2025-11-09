@@ -1,14 +1,24 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { usePolygonData, usePolygonSnapshot } from '@/hooks/usePolygonData'
 import { polygonService } from '@/services/polygonService'
 import { NormalizedChartData, Timeframe } from '@/types/polygon'
 import { resolveDisplayToData, recommendedRefreshMs, recommendedBarLimit } from '@/utils/timeframePolicy'
+import { detectFvgPatterns } from '@/components/ProfessionalChart/fvgDrawing'
 
 const ProfessionalChart = dynamic(() => import('@/components/ProfessionalChart').then(m => m.ProfessionalChart), {
+  ssr: false,
+})
+
+const FvgBacktestPanel = dynamic(() => import('@/components/FvgBacktestPanel').then(m => m.FvgBacktestPanel), {
+  ssr: false,
+})
+
+const FvgStrategyPanel = dynamic(() => import('@/components/FvgStrategyPanel').then(m => m.FvgStrategyPanel), {
   ssr: false,
 })
 
@@ -16,6 +26,9 @@ interface TimeframeAnalysis {
   timeframe: string
   signal: 'Strong Buy' | 'Buy' | 'Neutral' | 'Sell' | 'Strong Sell'
   strength: number
+  fvgSignal?: 'Bullish' | 'Bearish' | 'Neutral'
+  fvgCount?: number
+  fvgConfidence?: number
 }
 
 interface TickerDetails {
@@ -39,9 +52,25 @@ export default function TickerPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>(initialResolved.timeframe)
   const [showFvg, setShowFvg] = useState(false)
   const [fvgCount, setFvgCount] = useState(0)
+  const [showBacktest, setShowBacktest] = useState(false)
+  const [visibleBarCount, setVisibleBarCount] = useState(0)
+  const [visibleChartData, setVisibleChartData] = useState<any[]>([])
+  const [additionalBarsToLoad, setAdditionalBarsToLoad] = useState(0)
 
   // Centralized policy determines bar limits
-  const getBarLimit = (tf: Timeframe, displayTf: string): number => recommendedBarLimit(tf, displayTf)
+  const getBarLimit = (tf: Timeframe, displayTf: string): number =>
+    recommendedBarLimit(tf, displayTf) + additionalBarsToLoad
+
+  // Handler for when user scrolls to left edge - load exactly 100 more bars
+  const handleLoadMoreData = () => {
+    // Maximum 1000 additional bars to prevent overload
+    if (additionalBarsToLoad < 1000) {
+      setAdditionalBarsToLoad(prev => prev + 100)
+      console.log(`[InfiniteScroll] Loading 100 more bars. Total additional: ${additionalBarsToLoad + 100}`)
+    } else {
+      console.log('[InfiniteScroll] Maximum bar limit (1000 additional bars) reached')
+    }
+  }
 
   // Fetch real polygon.io data with dynamic limit based on timeframe
   const {
@@ -236,12 +265,113 @@ export default function TickerPage() {
     const sig30 = getSignalFromRSI(rsi30, trend30)
     const sig60 = getSignalFromRSI(rsi60, trend60)
 
+    // FVG Pattern Detection for each timeframe window
+    const analyzeFvgWindow = (data: any[]): { signal: 'Bullish' | 'Bearish' | 'Neutral'; count: number; confidence: number } => {
+      if (data.length < 10) return { signal: 'Neutral', count: 0, confidence: 0 }
+
+      const patterns = detectFvgPatterns(data, { recentOnly: true, minGapPct: 0.1, maxGapPct: 5.0 })
+
+      if (patterns.length === 0) return { signal: 'Neutral', count: 0, confidence: 0 }
+
+      // Count bullish vs bearish
+      const bullishPatterns = patterns.filter(p => p.type === 'bullish')
+      const bearishPatterns = patterns.filter(p => p.type === 'bearish')
+
+      // Calculate average confidence
+      const avgConfidence = patterns.reduce((sum, p) => sum + p.validationScore, 0) / patterns.length * 100
+
+      // Determine overall signal
+      let signal: 'Bullish' | 'Bearish' | 'Neutral' = 'Neutral'
+      if (bullishPatterns.length > bearishPatterns.length) {
+        signal = 'Bullish'
+      } else if (bearishPatterns.length > bullishPatterns.length) {
+        signal = 'Bearish'
+      }
+
+      return { signal, count: patterns.length, confidence: Math.round(avgConfidence) }
+    }
+
+    const fvg5 = analyzeFvgWindow(recent5)
+    const fvg15 = analyzeFvgWindow(recent15)
+    const fvg30 = analyzeFvgWindow(recent30)
+    const fvg60 = analyzeFvgWindow(recent60)
+    const fvgOverall = analyzeFvgWindow(polygonData.slice(-100)) // Last 100 bars for overall
+
+    // Map to actual timeframe labels based on current chart timeframe
+    const getTimeframeLabel = (bars: number): string => {
+      // If viewing 15m chart, 5 bars = 75min (~1h), 15 bars = 4h, etc.
+      if (timeframe === '15m') {
+        if (bars === 5) return '1 Hour'
+        if (bars === 15) return '4 Hours'
+        if (bars === 30) return '8 Hours'
+        if (bars === 60) return '1 Day'
+      }
+      // If viewing 1h chart, 5 bars = 5h, 15 bars = 15h, etc.
+      if (timeframe === '1h') {
+        if (bars === 5) return '5 Hours'
+        if (bars === 15) return '15 Hours'
+        if (bars === 30) return '30 Hours'
+        if (bars === 60) return '2.5 Days'
+      }
+      // If viewing 4h chart
+      if (timeframe === '4h') {
+        if (bars === 5) return '20 Hours'
+        if (bars === 15) return '2.5 Days'
+        if (bars === 30) return '5 Days'
+        if (bars === 60) return '10 Days'
+      }
+      // If viewing 1d chart
+      if (timeframe === '1d') {
+        if (bars === 5) return '1 Week'
+        if (bars === 15) return '3 Weeks'
+        if (bars === 30) return '1 Month'
+        if (bars === 60) return '3 Months'
+      }
+      // Default to bar count
+      return `${bars} Bars`
+    }
+
     return [
-      { timeframe: '5 Bars', signal: sig5.signal, strength: sig5.strength },
-      { timeframe: '15 Bars', signal: sig15.signal, strength: sig15.strength },
-      { timeframe: '30 Bars', signal: sig30.signal, strength: sig30.strength },
-      { timeframe: '60 Bars', signal: sig60.signal, strength: sig60.strength },
-      { timeframe: 'Overall', signal: liveSignal.recommendation as any, strength: liveSignal.confidence },
+      {
+        timeframe: getTimeframeLabel(5),
+        signal: sig5.signal,
+        strength: sig5.strength,
+        fvgSignal: fvg5.signal,
+        fvgCount: fvg5.count,
+        fvgConfidence: fvg5.confidence
+      },
+      {
+        timeframe: getTimeframeLabel(15),
+        signal: sig15.signal,
+        strength: sig15.strength,
+        fvgSignal: fvg15.signal,
+        fvgCount: fvg15.count,
+        fvgConfidence: fvg15.confidence
+      },
+      {
+        timeframe: getTimeframeLabel(30),
+        signal: sig30.signal,
+        strength: sig30.strength,
+        fvgSignal: fvg30.signal,
+        fvgCount: fvg30.count,
+        fvgConfidence: fvg30.confidence
+      },
+      {
+        timeframe: getTimeframeLabel(60),
+        signal: sig60.signal,
+        strength: sig60.strength,
+        fvgSignal: fvg60.signal,
+        fvgCount: fvg60.count,
+        fvgConfidence: fvg60.confidence
+      },
+      {
+        timeframe: 'Overall',
+        signal: liveSignal.recommendation as any,
+        strength: liveSignal.confidence,
+        fvgSignal: fvgOverall.signal,
+        fvgCount: fvgOverall.count,
+        fvgConfidence: fvgOverall.confidence
+      },
     ]
   }
 
@@ -413,16 +543,19 @@ export default function TickerPage() {
       {/* Ticker Header Section */}
       <header className="bg-gray-900 border-b border-gray-800 py-4 px-4 ticker-header">
         <div className="max-w-7xl mx-auto ticker-header__container">
-          <button
-            onClick={() => router.push('/')}
+          <Link
+            href="/dashboard"
             className="mb-4 text-sm text-gray-500 hover:text-white transition-colors flex items-center gap-2"
           >
             ← Back to Dashboard
-          </button>
+          </Link>
           <div className="flex flex-col gap-4 ticker-header__content">
             <div className="flex flex-row items-center justify-between gap-2 flex-wrap ticker-header__row">
               <div className="flex flex-row items-baseline gap-2 sm:gap-4 ticker-header__titleGroup">
                 <h1 className="text-xl sm:text-3xl font-bold ticker-header__title">{ticker.symbol}</h1>
+                <span className="text-xs sm:text-sm text-gray-500 font-medium" title={`Visible: ${visibleBarCount} / Total: ${chartData.length} bars • Timeframe: ${timeframe}, Range: ${displayTimeframe}`}>
+                  {visibleBarCount} bars
+                </span>
                 <div className="flex items-baseline gap-2 sm:gap-3">
                   <span className="text-lg sm:text-2xl font-semibold transition-all duration-200 hover:text-green-300 ticker-header__price">
                     ${livePrice.toFixed(2)}
@@ -519,6 +652,13 @@ export default function TickerPage() {
               >
                 {showFvg ? '✓ FVG Detection ON' : 'FVG Detection OFF'}
               </button>
+              <button
+                onClick={() => setShowBacktest(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-purple-500/20 text-purple-400 border border-purple-500 hover:bg-purple-500/30"
+                title="View FVG Backtest Results"
+              >
+                📊 Backtest
+              </button>
             </div>
 
             <ProfessionalChart
@@ -534,10 +674,16 @@ export default function TickerPage() {
               data={chartData.length > 0 ? chartData : undefined}
               showFvg={showFvg}
               onFvgCountChange={setFvgCount}
+              onVisibleBarCountChange={(count, data) => {
+                setVisibleBarCount(count)
+                setVisibleChartData(data)
+              }}
+              onLoadMoreData={handleLoadMoreData}
               onTimeframeChange={(tf, displayTf) => {
                 console.log('[TickerPage] Timeframe changed to:', tf, 'Display:', displayTf);
                 setTimeframe(tf as any);
                 setDisplayTimeframe(displayTf);
+                setAdditionalBarsToLoad(0); // Reset to base limit when changing timeframe
               }}
             />
           </div>
@@ -560,10 +706,12 @@ export default function TickerPage() {
             {timeframeSignals.map((tf) => (
               <div key={tf.timeframe} className="text-center bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
                 <div className="text-xs text-gray-500 mb-2 font-medium">{tf.timeframe}</div>
-                <div className={`text-xs sm:text-sm font-bold mb-2 ${getSignalColor(tf.signal)}`}>
+
+                {/* RSI/Trend Signal */}
+                <div className={`text-xs sm:text-sm font-bold mb-1 ${getSignalColor(tf.signal)}`}>
                   {tf.signal}
                 </div>
-                <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden mb-2">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
                       tf.signal.includes('Buy') ? 'bg-green-400' :
@@ -573,7 +721,35 @@ export default function TickerPage() {
                     style={{ width: `${tf.strength}%` }}
                   />
                 </div>
-                <div className="text-xs text-gray-500 mt-1">{tf.strength}%</div>
+                <div className="text-xs text-gray-500 mb-2">{tf.strength}%</div>
+
+                {/* FVG Pattern Analysis */}
+                {tf.fvgCount !== undefined && tf.fvgCount > 0 && (
+                  <div className="pt-2 border-t border-gray-700/50">
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        tf.fvgSignal === 'Bullish' ? 'bg-green-400' :
+                        tf.fvgSignal === 'Bearish' ? 'bg-red-400' :
+                        'bg-gray-400'
+                      }`}></div>
+                      <span className={`text-xs font-semibold ${
+                        tf.fvgSignal === 'Bullish' ? 'text-green-400' :
+                        tf.fvgSignal === 'Bearish' ? 'text-red-400' :
+                        'text-gray-400'
+                      }`}>
+                        {tf.fvgSignal} FVG
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {tf.fvgCount} pattern{tf.fvgCount > 1 ? 's' : ''} • {tf.fvgConfidence}%
+                    </div>
+                  </div>
+                )}
+                {tf.fvgCount === 0 && (
+                  <div className="pt-2 border-t border-gray-700/50">
+                    <div className="text-xs text-gray-600">No FVG patterns</div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -783,7 +959,28 @@ export default function TickerPage() {
             </div>
           </article>
         </section>
+
+        {/* FVG Trading Strategy */}
+        {polygonData.length > 30 && (
+          <section className="mt-6">
+            <FvgStrategyPanel
+              data={polygonData}
+              timeframe={timeframe}
+            />
+          </section>
+        )}
       </main>
+
+      {/* FVG Backtest Panel */}
+      {showBacktest && visibleChartData.length > 0 && (
+        <FvgBacktestPanel
+          data={visibleChartData}
+          timeframe={timeframe}
+          displayTimeframe={displayTimeframe}
+          isOpen={showBacktest}
+          onClose={() => setShowBacktest(false)}
+        />
+      )}
     </div>
   )
 }

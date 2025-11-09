@@ -1,0 +1,115 @@
+/**
+ * Market Hours Background Drawing
+ * Draws colored background overlays for market open (green) and closed (red) hours
+ */
+
+import { CandleData } from './types'
+import { ChartPadding } from './canvasRendering'
+import { getMarketHoursSegments, getMarketHoursSegmentsWithDuration, MarketHoursConfig, DEFAULT_MARKET_HOURS } from '@/utils/marketHours'
+
+/**
+ * Draw market hours background overlays
+ * @param ctx Canvas rendering context
+ * @param visibleData Visible candle data
+ * @param padding Chart padding
+ * @param chartWidth Chart width in pixels
+ * @param chartHeight Chart height in pixels
+ * @param baseWidth Base width for candle calculations
+ * @param config Market hours configuration
+ */
+export function drawMarketHoursBackground(
+  ctx: CanvasRenderingContext2D,
+  visibleData: CandleData[],
+  padding: ChartPadding,
+  chartWidth: number,
+  chartHeight: number,
+  baseWidth: number,
+  config: MarketHoursConfig = DEFAULT_MARKET_HOURS
+) {
+  if (visibleData.length === 0) return
+
+  // Estimate bar duration (median diff of consecutive bars). Fallback to 1m.
+  let barDurationMs = 60_000
+  if (visibleData.length >= 3) {
+    const diffs: number[] = []
+    const count = Math.min(visibleData.length - 1, 10)
+    for (let i = 0; i < count; i++) {
+      const dt = visibleData[i + 1].time - visibleData[i].time
+      if (dt > 0) diffs.push(dt)
+    }
+    if (diffs.length > 0) {
+      diffs.sort((a, b) => a - b)
+      barDurationMs = diffs[Math.floor(diffs.length / 2)]
+    }
+  }
+
+  // Use duration-aware segmentation so 1h bars overlapping 9:30–4:00 render as open.
+  const segments = getMarketHoursSegmentsWithDuration(visibleData, barDurationMs, config)
+
+  // Match candle positioning logic so backgrounds don't drift while zooming/panning
+  // Use the larger of baseWidth or actual visible data length
+  const effectiveWidth = Math.max(baseWidth, visibleData.length)
+  const candleWidth = chartWidth / effectiveWidth
+  // When zoomed out (effectiveWidth > visibleData.length), candles shift right;
+  // apply the same leftOffset so backgrounds align with candles.
+  const leftOffset = (effectiveWidth - visibleData.length) * candleWidth
+  const chartTop = padding.top
+  const chartBottom = padding.top + chartHeight
+
+  segments.forEach(segment => {
+    const { startIndex, endIndex, isOpen } = segment
+
+    // Calculate x positions for this segment
+    const startX = padding.left + leftOffset + (startIndex * candleWidth)
+    const endX = padding.left + leftOffset + ((endIndex + 1) * candleWidth)
+    const width = endX - startX
+
+    // Set color based on market status
+    // Green with low opacity for open hours, red for closed hours
+    ctx.fillStyle = isOpen
+      ? 'rgba(34, 197, 94, 0.05)'  // Green with 5% opacity for open hours
+      : 'rgba(239, 68, 68, 0.08)'   // Red with 8% opacity for closed hours
+
+    // Draw rectangle covering the time segment
+    ctx.fillRect(startX, chartTop, width, chartHeight)
+  })
+}
+
+/**
+ * Draw market hours legend/indicator
+ * @param ctx Canvas rendering context
+ * @param rect Canvas bounding rect
+ * @param padding Chart padding
+ * @param config Market hours configuration
+ */
+export function drawMarketHoursLegend(
+  ctx: CanvasRenderingContext2D,
+  rect: DOMRect,
+  padding: ChartPadding,
+  config: MarketHoursConfig = DEFAULT_MARKET_HOURS
+) {
+  const legendX = padding.left + 10
+  const legendY = padding.top + 10
+
+  // Draw legend background
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+  ctx.fillRect(legendX, legendY, 140, 50)
+
+  // Draw border
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(legendX, legendY, 140, 50)
+
+  // Draw open hours indicator
+  ctx.fillStyle = 'rgba(34, 197, 94, 0.5)'
+  ctx.fillRect(legendX + 5, legendY + 8, 12, 12)
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '10px monospace'
+  ctx.fillText('Open (9:30am-4pm ET)', legendX + 22, legendY + 18)
+
+  // Draw closed hours indicator
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.5)'
+  ctx.fillRect(legendX + 5, legendY + 30, 12, 12)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText('Closed', legendX + 22, legendY + 40)
+}

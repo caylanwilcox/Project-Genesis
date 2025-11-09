@@ -45,6 +45,8 @@ export function usePolygonData({
       setIsLoading(true);
       setError(null);
 
+      console.log(`[usePolygonData] Fetching data for ${ticker} - Timeframe: ${timeframe}, Limit: ${limit}, Display: ${displayTimeframe}`);
+
       // Check if API is configured
       if (!polygonService.isConfigured()) {
         throw new Error('Polygon.io API key not configured. Please set NEXT_PUBLIC_POLYGON_API_KEY in your environment variables.');
@@ -52,6 +54,7 @@ export function usePolygonData({
 
       // Fetch aggregate data for chart
       const aggregates = await polygonService.getAggregates(ticker, timeframe, limit, displayTimeframe);
+      console.log(`[usePolygonData] Fetched ${aggregates.length} bars for ${ticker}`);
 
       // Set the data (service ensures it's not empty)
       setData(aggregates);

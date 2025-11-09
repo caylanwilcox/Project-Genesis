@@ -64,36 +64,37 @@ export function recommendedRefreshMs(timeframe: Timeframe): number {
 }
 
 // Recommended bar limits based on timeframe and selected display range
+// Load at least 3x the displayed interval to eliminate blank space
 export function recommendedBarLimit(timeframe: Timeframe, displayTimeframe: string): number {
-  // Minute resolutions
-  if (timeframe === '1m') return 390 // full trading day
-  if (timeframe === '5m') return 390 // ~5 days coverage
-  if (timeframe === '15m') return 200 // ~2-3 weeks
-  if (timeframe === '30m') return 200
+  // Minute resolutions - load 3x for buffer
+  if (timeframe === '1m') return 1170 // 3 trading days (390 * 3)
+  if (timeframe === '5m') return 1170 // ~15 days coverage (390 * 3)
+  if (timeframe === '15m') return 600 // ~6-9 weeks (200 * 3)
+  if (timeframe === '30m') return 600 // (200 * 3)
 
-  // Hour resolutions
+  // Hour resolutions - load 3x for buffer
   if (timeframe === '1h') {
-    if (displayTimeframe === '1D') return 10 // 1 day + buffer
-    if (displayTimeframe === '5D') return 150 // ~1 month for scroll headroom
-    if (displayTimeframe === '1M') return 150 // ~1 month
-    return 200
+    if (displayTimeframe === '1D') return 30 // 3 days minimum (10 * 3)
+    if (displayTimeframe === '5D') return 450 // ~3 months (150 * 3)
+    if (displayTimeframe === '1M') return 450 // ~3 months (150 * 3)
+    return 600 // (200 * 3)
   }
-  if (timeframe === '2h') return 200
-  if (timeframe === '4h') return 200
+  if (timeframe === '2h') return 600 // (200 * 3)
+  if (timeframe === '4h') return 600 // (200 * 3)
 
-  // Daily and above
+  // Daily and above - load 3x for buffer
   if (timeframe === '1d') {
-    if (displayTimeframe === '1M') return 30
-    if (displayTimeframe === '3M') return 90
-    if (displayTimeframe === '6M') return 180
-    if (displayTimeframe === 'YTD') return 300
-    if (displayTimeframe === '1Y') return 365
-    return 200
+    if (displayTimeframe === '1M') return 90 // ~3 months (30 * 3)
+    if (displayTimeframe === '3M') return 300 // ~9 months (100 * 3)
+    if (displayTimeframe === '6M') return 540 // ~18 months (180 * 3)
+    if (displayTimeframe === 'YTD') return 900 // ~3 years (300 * 3)
+    if (displayTimeframe === '1Y') return 1095 // ~3 years (365 * 3)
+    return 600 // (200 * 3)
   }
-  if (timeframe === '1w') return 260 // ~5 years
-  if (timeframe === '1M') return 120 // ~10 years
+  if (timeframe === '1w') return 780 // ~15 years (260 * 3)
+  if (timeframe === '1M') return 360 // ~30 years (120 * 3)
 
-  return 200
+  return 600 // default 3x buffer (200 * 3)
 }
 
 export const INTERVAL_LABELS: string[] = [

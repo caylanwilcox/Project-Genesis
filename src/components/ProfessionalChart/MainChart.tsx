@@ -8,6 +8,7 @@ import { drawCandles, drawVolumeBars } from './candleDrawing'
 import { drawPriceLines, drawCurrentPriceLine, PriceTag } from './priceLines'
 import { Crosshair } from './Crosshair'
 import { detectFvgPatterns, drawFvgPatterns } from './fvgDrawing'
+import { drawMarketHoursBackground } from './marketHoursDrawing'
 
 interface MainChartProps {
   data: CandleData[]
@@ -24,6 +25,7 @@ interface MainChartProps {
   isPanning: boolean
   showFvg?: boolean
   onFvgCountChange?: (count: number) => void
+  onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
   priceOffset?: number
 }
 
@@ -42,6 +44,7 @@ export const MainChart: React.FC<MainChartProps> = ({
   isPanning,
   showFvg = false,
   onFvgCountChange,
+  onVisibleBarCountChange,
   priceOffset = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -81,6 +84,11 @@ export const MainChart: React.FC<MainChartProps> = ({
     const visibleData = data.slice(visibleRange.start, visibleRange.end)
     if (visibleData.length === 0) return
 
+    // Notify parent of visible bar count and data
+    if (onVisibleBarCountChange) {
+      onVisibleBarCountChange(visibleData.length, visibleData)
+    }
+
     const { minPrice, maxPrice, priceRange } = calculatePriceRange(visibleData, priceScale, priceOffset)
 
     // POLICY: Detect auto-fit mode (timeScale=1.0) and use actual data length
@@ -103,11 +111,16 @@ export const MainChart: React.FC<MainChartProps> = ({
     drawPriceGrid({ ctx, rect, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, isNarrow, gutter })
     drawTimeGrid(ctx, volCtx, rect, volRect, padding, chartWidth, chartHeight, volChartHeight, visibleData, dataTimeframe, displayTimeframe, isNarrow)
 
-    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth)
+    // Draw market hours background (6am-1pm) for minute/hour timeframes
+    if (dataTimeframe === '1m' || dataTimeframe === '5m' || dataTimeframe === '15m' || dataTimeframe === '30m' || dataTimeframe === '1h') {
+      drawMarketHoursBackground(ctx, visibleData, padding, chartWidth, chartHeight, baseWidth)
+    }
+
+    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange)
 
     const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
     const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0
-    const candleWidth = chartWidth / baseWidth
+    const candleWidth = chartWidth / visibleData.length
 
     drawVolumeBars(volCtx, visibleData, candleWidth, volChartHeight, maxVolume, padding, chartWidth)
 
@@ -145,7 +158,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     volCtx.fillText(formatVolume(maxVolume), volLabelX, volChartHeight - 6)
 
     onOverlayTagsUpdate(tags)
-  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate, showFvg, priceOffset])
+  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate, showFvg, onVisibleBarCountChange, priceOffset])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

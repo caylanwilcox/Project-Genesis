@@ -9,6 +9,8 @@ export interface ProfessionalChartProps {
   onTimeframeChange?: (tf: string, displayTf: string) => void
   showFvg?: boolean
   onFvgCountChange?: (count: number) => void
+  onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
+  onLoadMoreData?: () => void
 }
 
 export interface CandleData {
