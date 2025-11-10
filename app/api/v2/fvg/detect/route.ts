@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     // Detect FVG patterns
     const fvgService = new FvgDetectionService({
-      minGapSizePct: body.minGapSizePct || 0.1,
+      minGapSizePct: body.minGapSizePct || 0.25,
       maxGapSizePct: body.maxGapSizePct || 5.0,
       requireVolumeConfirmation: body.requireVolumeConfirmation ?? true,
       minValidationScore: body.minValidationScore || 0.6,

@@ -266,10 +266,10 @@ export default function TickerPage() {
     const sig60 = getSignalFromRSI(rsi60, trend60)
 
     // FVG Pattern Detection for each timeframe window
-    const analyzeFvgWindow = (data: any[]): { signal: 'Bullish' | 'Bearish' | 'Neutral'; count: number; confidence: number } => {
+      const analyzeFvgWindow = (data: any[]): { signal: 'Bullish' | 'Bearish' | 'Neutral'; count: number; confidence: number } => {
       if (data.length < 10) return { signal: 'Neutral', count: 0, confidence: 0 }
 
-      const patterns = detectFvgPatterns(data, { recentOnly: true, minGapPct: 0.1, maxGapPct: 5.0 })
+        const patterns = detectFvgPatterns(data, { recentOnly: true, minGapPct: 1.5, maxGapPct: 8.0 })
 
       if (patterns.length === 0) return { signal: 'Neutral', count: 0, confidence: 0 }
 

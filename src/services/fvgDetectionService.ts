@@ -92,7 +92,7 @@ export interface FvgDetectionConfig {
 }
 
 const DEFAULT_CONFIG: FvgDetectionConfig = {
-  minGapSizePct: 0.1,
+  minGapSizePct: 0.25,
   maxGapSizePct: 5.0,
   requireVolumeConfirmation: true,
   minValidationScore: 0.6,

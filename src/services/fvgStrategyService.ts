@@ -1,14 +1,15 @@
 /**
  * Advanced FVG Trading Strategy Service
  *
- * Multi-Timeframe FVG Continuation Strategy with Smart Filtering
+ * Gap-Zone Fibonacci FVG Strategy for 2:1 to 5:1 Returns
  *
  * Core Principles:
- * 1. Multi-Timeframe Confirmation: Only trade FVGs that align with higher timeframe bias
- * 2. Quality Over Quantity: High-confidence patterns only (validation score ≥ 75%)
- * 3. Context-Aware Entries: Consider market structure, volume profile, and momentum
- * 4. Adaptive Risk Management: Position sizing based on pattern quality and market conditions
- * 5. Smart Exit Strategy: Trail stops after TP1 hit, partial profit taking
+ * 1. Trade WITHIN the Fair Value Gap using Fibonacci levels for entry and targets
+ * 2. Larger Gaps (1.5%+): Target patterns that signal major moves (2:1 to 5:1 R:R)
+ * 3. Fibonacci-Based Targets: Enter at Fib retracements, target gap fill + extensions for 5% returns
+ * 4. Multi-Timeframe Confirmation: Only trade FVGs that align with higher timeframe bias
+ * 5. Quality Over Quantity: High-confidence patterns only (validation score ≥ 75%)
+ * 6. Adaptive Risk Management: Position sizing based on pattern quality and market conditions
  */
 
 import { CandleData } from '@/components/ProfessionalChart/types'
@@ -86,15 +87,15 @@ export interface FvgStrategyConfig {
 
 const DEFAULT_CONFIG: FvgStrategyConfig = {
   minConfidence: 75,
-  minGapSizePercent: 0.15,
-  maxGapSizePercent: 3.0,
+  minGapSizePercent: 1.5,  // LARGER gaps (1.5%+) signal institutional activity and 2:1 to 5:1 move potential
+  maxGapSizePercent: 8.0,  // Allow larger gaps for high volatility plays targeting 5% returns
   requireHTFConfirmation: true,
   htfLookback: 20,
   baseRiskPercent: 1.0,
   maxRiskPercent: 2.0,
   adjustRiskByConfidence: true,
   entryMode: 'limit',
-  entryZonePercent: 50,
+  entryZonePercent: 50,  // Enter at 50% Fibonacci retracement within gap
   maxBarsToWaitForEntry: 10,
   useTrailingStop: true,
   trailStopPercent: 0.5,
@@ -231,14 +232,20 @@ export function generateFvgSignals(
       continue
     }
 
-    // Calculate entry zone (middle of gap for limit orders)
-    const entryZoneSize = (pattern.gapHigh - pattern.gapLow) * (cfg.entryZonePercent / 100)
-    const entryZoneLow = pattern.type === 'bullish'
-      ? pattern.gapLow
-      : pattern.gapHigh - entryZoneSize
-    const entryZoneHigh = pattern.type === 'bullish'
-      ? pattern.gapLow + entryZoneSize
-      : pattern.gapHigh
+    // Calculate Fibonacci entry zones WITHIN the gap
+    // For bullish: Enter on retracement into gap (Fib 38.2% to 61.8%)
+    // For bearish: Enter on bounce into gap (Fib 38.2% to 61.8%)
+    const gapSize = pattern.gapHigh - pattern.gapLow
+    const fib382 = pattern.type === 'bullish'
+      ? pattern.gapLow + (gapSize * 0.382)
+      : pattern.gapHigh - (gapSize * 0.382)
+    const fib618 = pattern.type === 'bullish'
+      ? pattern.gapLow + (gapSize * 0.618)
+      : pattern.gapHigh - (gapSize * 0.618)
+
+    // Entry zone is between Fibonacci 38.2% and 61.8% within the gap
+    const entryZoneLow = pattern.type === 'bullish' ? fib382 : fib618
+    const entryZoneHigh = pattern.type === 'bullish' ? fib618 : fib382
 
     // Calculate position size
     const positionSize = calculatePositionSize(confidence, cfg)

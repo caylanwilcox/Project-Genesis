@@ -10,6 +10,7 @@ export interface FvgPattern {
   startIndex: number
   gapHigh: number
   gapLow: number
+  gapSizePct: number
   entryPrice: number
   tp1: number
   tp2: number
@@ -18,6 +19,9 @@ export interface FvgPattern {
   validationScore: number
   volumeProfile: string
   marketStructure: string
+  fib382?: number  // Fibonacci 38.2% level within gap
+  fib50?: number   // Fibonacci 50% level within gap
+  fib618?: number  // Fibonacci 61.8% level within gap
 }
 
 /**
@@ -34,7 +38,7 @@ export function detectFvgPatterns(data: CandleData[], options?: {
 
   // Default: scan all data, but allow "recent only" mode (last 50 candles)
   const startIndex = options?.recentOnly && data.length > 50 ? data.length - 50 : 2
-  const minGapPct = options?.minGapPct ?? 0.1
+  const minGapPct = options?.minGapPct ?? 0.2
   const maxGapPct = options?.maxGapPct ?? 5.0
 
   for (let i = startIndex; i < data.length; i++) {
@@ -61,20 +65,28 @@ export function detectFvgPatterns(data: CandleData[], options?: {
         const gapLow = candle1.high  // Bottom of imbalance zone
         const gapHigh = candle3.low  // Top of imbalance zone
 
-        // CONTINUATION STRATEGY: Bullish FVG = LONG on pullback to gap
-        // Entry at bottom of gap (best fill for LONG entry)
-        const entryPrice = gapLow
+        // GAP-ZONE FIBONACCI STRATEGY: Trade WITHIN the gap for 5% returns
+        // Bullish FVG: Enter at Fibonacci retracement levels within the gap
+        const fib382 = gapLow + (gapSize * 0.382)  // 38.2% Fibonacci level
+        const fib50 = gapLow + (gapSize * 0.50)    // 50% Fibonacci level (optimal entry)
+        const fib618 = gapLow + (gapSize * 0.618)  // 61.8% Fibonacci level
 
-        // Risk = distance from entry to stop loss
-        const riskAmount = gapSize * 0.5  // Risk: 0.5x gap size below entry
+        // Entry at 50% Fibonacci retracement (middle of gap)
+        const entryPrice = fib50
 
-        // Targets ABOVE the gap (TRUE R:R ratios)
-        const tp1 = entryPrice + (riskAmount * 0.5)  // TRUE 0.5:1 R:R (0.5x risk as reward)
-        const tp2 = entryPrice + (riskAmount * 1.0)  // TRUE 1:1 R:R (1x risk as reward)
-        const tp3 = entryPrice + (riskAmount * 2.0)  // TRUE 2:1 R:R (2x risk as reward)
+        // Risk = distance from entry to stop below gap
+        const riskAmount = gapSize * 0.75  // Risk: 0.75x gap size below entry
+
+        // FIBONACCI-BASED TARGETS for 2:1 to 5:1 returns:
+        // TP1: 100% gap fill (gap high) - First resistance
+        // TP2: 150% Fibonacci extension (1.5x gap size above gap high)
+        // TP3: 200-250% Fibonacci extension (targeting 5% total return)
+        const tp1 = gapHigh  // 100% gap fill
+        const tp2 = gapHigh + (gapSize * 0.5)  // 150% extension
+        const tp3 = gapHigh + (gapSize * 1.0)  // 200% extension (5% move target)
 
         // Stop loss BELOW the gap (invalidation)
-        const stopLoss = entryPrice - riskAmount  // SL at entry minus risk
+        const stopLoss = gapLow - (gapSize * 0.5)  // SL below gap low
 
         // Volume profile analysis (Fabio emphasizes order flow)
         const avgVolume = (candle1.volume + candle2.volume + candle3.volume) / 3
@@ -104,6 +116,7 @@ export function detectFvgPatterns(data: CandleData[], options?: {
           startIndex: i - 2,
           gapHigh,
           gapLow,
+          gapSizePct,
           entryPrice,
           tp1,
           tp2,
@@ -111,7 +124,10 @@ export function detectFvgPatterns(data: CandleData[], options?: {
           stopLoss,
           validationScore: Math.min(1.0, score),
           volumeProfile,
-          marketStructure
+          marketStructure,
+          fib382,
+          fib50,
+          fib618
         })
       }
     }
@@ -133,24 +149,27 @@ export function detectFvgPatterns(data: CandleData[], options?: {
         const gapHigh = candle1.low  // Top of imbalance zone
         const gapLow = candle3.high   // Bottom of imbalance zone
 
-        // BEARISH FVG CONTINUATION LOGIC (Fabio's Way):
-        // - Price dropped aggressively leaving gap ABOVE
-        // - Wait for pullback UP to gap zone (retracement to imbalance)
-        // - Enter SHORT at gap HIGH (top of zone - best fill for continuation DOWN)
-        // - Targets BELOW gap (continuation of downward momentum)
-        // - Stop ABOVE gap (invalidation if imbalance fails)
+        // GAP-ZONE FIBONACCI STRATEGY: Trade WITHIN the gap for 5% returns
+        // Bearish FVG: Enter at Fibonacci retracement levels within the gap
+        const fib382 = gapHigh - (gapSize * 0.382)  // 38.2% Fibonacci level
+        const fib50 = gapHigh - (gapSize * 0.50)    // 50% Fibonacci level (optimal entry)
+        const fib618 = gapHigh - (gapSize * 0.618)  // 61.8% Fibonacci level
 
-        const entryPrice = gapHigh // SHORT entry at TOP of gap when price retraces up
+        // Entry at 50% Fibonacci retracement (middle of gap)
+        const entryPrice = fib50
 
-        // Risk = distance from entry to stop loss
-        const riskAmount = gapSize * 0.5  // Risk: 0.5x gap size above entry
+        // Risk = distance from entry to stop above gap
+        const riskAmount = gapSize * 0.75  // Risk: 0.75x gap size above entry
 
-        // Targets: TRUE R:R ratios BELOW the gap
-        const tp1 = entryPrice - (riskAmount * 0.5)  // TRUE 0.5:1 R:R (0.5x risk as reward)
-        const tp2 = entryPrice - (riskAmount * 1.0)  // TRUE 1:1 R:R (1x risk as reward)
-        const tp3 = entryPrice - (riskAmount * 2.0)  // TRUE 2:1 R:R (2x risk as reward)
+        // FIBONACCI-BASED TARGETS for 2:1 to 5:1 returns:
+        // TP1: 100% gap fill (gap low) - First support
+        // TP2: 150% Fibonacci extension (1.5x gap size below gap low)
+        // TP3: 200-250% Fibonacci extension (targeting 5% total return)
+        const tp1 = gapLow  // 100% gap fill
+        const tp2 = gapLow - (gapSize * 0.5)  // 150% extension
+        const tp3 = gapLow - (gapSize * 1.0)  // 200% extension (5% move target)
 
-        const stopLoss = entryPrice + riskAmount // SL at entry plus risk (invalidation ABOVE gap)
+        const stopLoss = gapHigh + (gapSize * 0.5) // SL above gap high (invalidation)
 
         // Volume & Structure Analysis (Fabio's criteria)
         const avgVolume = (candle1.volume + candle2.volume + candle3.volume) / 3
@@ -181,6 +200,7 @@ export function detectFvgPatterns(data: CandleData[], options?: {
           startIndex: i - 2,
           gapHigh,
           gapLow,
+          gapSizePct,
           entryPrice,
           tp1,
           tp2,
@@ -188,7 +208,10 @@ export function detectFvgPatterns(data: CandleData[], options?: {
           stopLoss,
           validationScore: Math.min(1.0, score),
           volumeProfile,
-          marketStructure
+          marketStructure,
+          fib382,
+          fib50,
+          fib618
         })
       }
     }
@@ -232,9 +255,9 @@ export function drawFvgPatterns(
   const gapExtendCandles = 30 // Extend 30 candles forward from detection point
 
   patterns.forEach(pattern => {
-    // Pattern indices are relative to the provided visibleData slice
-    // So we use startIndex directly without subtracting visibleStart
-    const localIndex = pattern.startIndex
+    // Pattern indices are relative to the FULL dataset.
+    // Convert to local index within the current visible slice by subtracting visibleStart.
+    const localIndex = pattern.startIndex - visibleStart
 
     // Pattern is visible if it starts before the end of visible range AND extends into visible range
     const patternEndIndex = localIndex + gapExtendCandles

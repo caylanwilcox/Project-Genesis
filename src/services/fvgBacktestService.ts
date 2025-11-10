@@ -93,7 +93,7 @@ export function backtestFvgPatterns(
   options: BacktestOptions = {}
 ): BacktestResults {
   const {
-    minGapPct = 0.1,
+    minGapPct = 0.25,
     maxGapPct = 5.0,
     lookAheadBars = 50,
     entryTolerance = 0.05,

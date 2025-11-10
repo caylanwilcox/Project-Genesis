@@ -2,17 +2,18 @@
 
 ## Overview
 
-This document outlines the **Multi-Timeframe Fair Value Gap (FVG) Continuation Strategy** - a systematic approach to trading institutional order flow imbalances with emphasis on quality over quantity.
+This document outlines the **Gap-Zone Fibonacci FVG Strategy for 2:1 to 5:1 Returns** - a systematic approach to trading WITHIN Fair Value Gaps using Fibonacci levels to capture institutional order flow imbalances targeting 5% returns.
 
 ## Core Philosophy
 
-**"Trade only the highest probability setups with multi-timeframe confirmation"**
+**"Trade WITHIN the gap using Fibonacci levels - target larger moves (2:1 to 5:1 R:R)"**
 
-The strategy filters out noise by requiring:
-1. High-confidence FVG patterns (≥75% validation score)
-2. Higher timeframe trend alignment
-3. Proper volume and market structure confirmation
-4. Strategic entry zones for optimal risk/reward
+The strategy focuses on:
+1. **Larger Gaps (1.5%+)**: Only trade significant gaps that signal strong institutional activity and major price moves
+2. **Gap-Zone Fibonacci Trading**: Enter at Fibonacci retracements WITHIN the gap, target gap fill + extensions for 5% returns
+3. **Multi-Timeframe Confirmation**: Higher timeframe trend alignment for directional bias
+4. **Quality Over Quantity**: High-confidence patterns only (≥75% validation score)
+5. **Fibonacci-Based Targets**: Use 100% gap fill, 150% and 200% Fibonacci extensions for 2:1 to 5:1 returns
 
 ---
 
@@ -26,10 +27,16 @@ A Fair Value Gap is a 3-candle imbalance pattern where:
 - **Bearish FVG**: Candle 3 high < Candle 1 low (gap down, leaving unfilled space above)
 
 **Filtering Criteria:**
-- Gap size: 0.15% - 3.0% of price
+- **Gap size: 1.5% - 8.0% of price** (LARGER gaps signal institutional activity and major moves)
 - Validation score: Minimum 75% confidence
 - Volume profile: Preferably "bell curve" (high volume on middle candle)
 - Market structure: "balance to imbalance" transitions preferred
+
+**Why Larger Gaps?**
+- 1.5%+ gaps indicate strong institutional order flow
+- Bigger gaps create more "room to run" for 2:1 to 5:1 R:R trades
+- Small gaps (< 1%) often don't produce the momentum needed for 5% returns
+- Larger gaps have higher probability of continuation and Fibonacci extension targets
 
 ### 2. Multi-Timeframe Confirmation
 
@@ -61,22 +68,40 @@ NEUTRAL:
 
 ---
 
-## Entry Strategy
+## Entry Strategy - Gap-Zone Fibonacci Trading
 
-### Entry Zone Definition
+### Fibonacci Levels WITHIN the Gap
 
-Instead of a single entry price, define an **entry zone**:
+The key difference: **Trade WITHIN the Fair Value Gap using Fibonacci retracements**
 
 ```
-For BULLISH FVG:
-- Entry Zone Low: Bottom of gap (Candle 1 high)
-- Entry Zone High: Bottom of gap + 50% of gap size
-- Target Entry: Middle of entry zone (optimal fill)
+For BULLISH FVG (price retraces down into gap):
+Gap Size = Gap High (Candle 3 low) - Gap Low (Candle 1 high)
 
-For BEARISH FVG:
-- Entry Zone High: Top of gap (Candle 1 low)
-- Entry Zone Low: Top of gap - 50% of gap size
-- Target Entry: Middle of entry zone (optimal fill)
+Fibonacci Levels:
+- Gap Low (0%): Candle 1 high (bottom of gap)
+- Fib 38.2%: Gap Low + (Gap Size × 0.382)
+- Fib 50%: Gap Low + (Gap Size × 0.50) ← OPTIMAL ENTRY
+- Fib 61.8%: Gap Low + (Gap Size × 0.618)
+- Gap High (100%): Candle 3 low (top of gap)
+
+Entry Zone: Between Fib 38.2% and Fib 61.8% (WITHIN the gap)
+Target Entry: Fib 50% (middle of gap)
+Stop Loss: Below Gap Low - (Gap Size × 0.5)
+
+For BEARISH FVG (price bounces up into gap):
+Gap Size = Gap High (Candle 1 low) - Gap Low (Candle 3 high)
+
+Fibonacci Levels:
+- Gap High (0%): Candle 1 low (top of gap)
+- Fib 38.2%: Gap High - (Gap Size × 0.382)
+- Fib 50%: Gap High - (Gap Size × 0.50) ← OPTIMAL ENTRY
+- Fib 61.8%: Gap High - (Gap Size × 0.618)
+- Gap Low (100%): Candle 3 high (bottom of gap)
+
+Entry Zone: Between Fib 38.2% and Fib 61.8% (WITHIN the gap)
+Target Entry: Fib 50% (middle of gap)
+Stop Loss: Above Gap High + (Gap Size × 0.5)
 ```
 
 ### Entry Modes
@@ -103,16 +128,23 @@ For BEARISH FVG:
 
 ### Stop Loss Placement
 
+**Gap-Zone Fibonacci Stop Loss Strategy:**
+
 ```
 BULLISH FVG:
-- Stop Loss = Entry Price - (Gap Size × 0.5)
-- Places SL 0.5x gap size below entry
-- Invalidates setup if price breaks below gap support
+- Entry: Fib 50% (middle of gap)
+- Stop Loss = Gap Low - (Gap Size × 0.5)
+- Places SL below the entire gap zone
+- Invalidates if price rejects gap and breaks down
 
 BEARISH FVG:
-- Stop Loss = Entry Price + (Gap Size × 0.5)
-- Places SL 0.5x gap size above entry
-- Invalidates setup if price breaks above gap resistance
+- Entry: Fib 50% (middle of gap)
+- Stop Loss = Gap High + (Gap Size × 0.5)
+- Places SL above the entire gap zone
+- Invalidates if price rejects gap and breaks up
+
+Risk Amount = |Entry Price (Fib 50%) - Stop Loss|
+Risk Amount ≈ Gap Size × 0.75 (approximately)
 ```
 
 ### Position Sizing
@@ -143,32 +175,39 @@ Position Size % = 1.0% + ((Confidence - 75%) / 25%) × 1.0%
 
 ---
 
-## Exit Strategy
+## Exit Strategy - Fibonacci-Based Targets for 2:1 to 5:1 Returns
 
-### Take Profit Levels (Partial Profit Taking)
+### Take Profit Levels (Fibonacci Extensions)
 
-The strategy uses **TRUE Risk:Reward ratios** (not gap-size based):
+The strategy uses **Fibonacci-based targets** to achieve 2:1 to 5:1 R:R ratios:
 
 ```
-TAKE PROFIT LEVELS:
-┌─────────────────────────────────────────────────┐
-│ TP1: 0.5:1 R:R → Close 50% of position         │
-│ TP2: 1.0:1 R:R → Close 30% of position         │
-│ TP3: 2.0:1 R:R → Close remaining 20%           │
-└─────────────────────────────────────────────────┘
+FIBONACCI TARGET LEVELS:
+┌──────────────────────────────────────────────────────┐
+│ TP1: 100% Gap Fill → Close 50% of position         │
+│ TP2: 150% Fib Extension → Close 30% of position    │
+│ TP3: 200% Fib Extension → Close remaining 20%      │
+│      (Targeting 5% total return)                    │
+└──────────────────────────────────────────────────────┘
 
-CALCULATION:
-Risk Amount = |Entry Price - Stop Loss|
+For BULLISH FVG:
+- Entry: Fib 50% (middle of gap)
+- TP1 = Gap High (100% gap fill)
+- TP2 = Gap High + (Gap Size × 0.5)  [150% extension]
+- TP3 = Gap High + (Gap Size × 1.0)  [200% extension - 5% target]
+- Stop Loss = Gap Low - (Gap Size × 0.5)
 
-For BULLISH:
-- TP1 = Entry + (Risk × 0.5)
-- TP2 = Entry + (Risk × 1.0)
-- TP3 = Entry + (Risk × 2.0)
+For BEARISH FVG:
+- Entry: Fib 50% (middle of gap)
+- TP1 = Gap Low (100% gap fill)
+- TP2 = Gap Low - (Gap Size × 0.5)  [150% extension]
+- TP3 = Gap Low - (Gap Size × 1.0)  [200% extension - 5% target]
+- Stop Loss = Gap High + (Gap Size × 0.5)
 
-For BEARISH:
-- TP1 = Entry - (Risk × 0.5)
-- TP2 = Entry - (Risk × 1.0)
-- TP3 = Entry - (Risk × 2.0)
+WHY THIS WORKS:
+- TP1 (Gap Fill): Natural resistance/support - high probability
+- TP2 (150% Extension): Momentum continuation zone
+- TP3 (200% Extension): With 1.5%+ gaps, often achieves 2:1 to 5:1 R:R
 ```
 
 ### Trailing Stop (After TP1 Hit)
@@ -180,22 +219,42 @@ Once TP1 is reached:
 4. Trail stop as price moves in your favor
 5. Let remaining position run to TP2/TP3
 
-**Example Trade Progression:**
+**Example Trade Progression (Bullish FVG):**
 ```
-Entry: $100
-Stop Loss: $99 (risk = $1)
-TP1: $100.50 (0.5:1 R:R)
-TP2: $101.00 (1:1 R:R)
-TP3: $102.00 (2:1 R:R)
+Stock Price: $100
+Gap Size: $2.00 (2% gap - meets 1.5% minimum)
+Gap Low: $99 (Candle 1 high)
+Gap High: $101 (Candle 3 low)
+
+Fibonacci Entry Zone:
+- Fib 38.2%: $99.76
+- Fib 50%: $100.00 ← ENTRY
+- Fib 61.8%: $100.24
+
+Trade Setup:
+Entry: $100.00 (Fib 50% - middle of gap)
+Stop Loss: $98.00 (Gap Low $99 - (Gap Size $2 × 0.5))
+Risk: $2.00 per share
+
+Fibonacci Targets:
+TP1: $101.00 (100% gap fill - Gap High)
+TP2: $102.00 (150% extension - Gap High + $1)
+TP3: $103.00 (200% extension - Gap High + $2) ← 3% TOTAL RETURN
+
+Risk:Reward Analysis:
+TP1: $1 reward / $2 risk = 0.5:1 R:R
+TP2: $2 reward / $2 risk = 1:1 R:R
+TP3: $3 reward / $2 risk = 1.5:1 R:R
+
+With LARGER gaps (3-4%), TP3 can achieve 2:1 to 5:1 R:R!
 
 PROGRESSION:
-1. Price hits $100.50 → Close 50%, move SL to $100
-2. Price continues to $101.20 → Trail SL to $100.60
-3. Price hits $101.00 → Close 30% more
-4. Price continues to $101.50 → Trail SL to $101.00
-5. Price hits $102.00 → Close final 20%
+1. Price retraces to $100.00 → Entry filled
+2. Price bounces to $101.00 → TP1 hit, close 50%, move SL to breakeven
+3. Price continues to $102.00 → TP2 hit, close 30%
+4. Price extends to $103.00 → TP3 hit, close final 20%
 
-RESULT: Protected profits while maximizing winners
+RESULT: 50% at +1%, 30% at +2%, 20% at +3% = Average +1.7% gain
 ```
 
 ---

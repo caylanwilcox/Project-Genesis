@@ -116,7 +116,7 @@ export const MainChart: React.FC<MainChartProps> = ({
       drawMarketHoursBackground(ctx, visibleData, padding, chartWidth, chartHeight, baseWidth)
     }
 
-    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange)
+    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth)
 
     const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
     const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0
@@ -125,18 +125,25 @@ export const MainChart: React.FC<MainChartProps> = ({
     drawVolumeBars(volCtx, visibleData, candleWidth, volChartHeight, maxVolume, padding, chartWidth)
 
     // Draw FVG patterns if enabled
-    if (showFvg && visibleData.length >= 3) {
+    if (showFvg && data.length >= 3) {
       // Adjust gap thresholds based on timeframe
-      const options = dataTimeframe === '1m' || dataTimeframe === '5m'
-        ? { minGapPct: 0.01, maxGapPct: 1.0, recentOnly: false } // Lower thresholds for minute charts
-        : { minGapPct: 0.1, maxGapPct: 5.0, recentOnly: false }  // Standard thresholds for hourly+ charts
+      const isMinute = dataTimeframe === '1m' || dataTimeframe === '5m' || dataTimeframe === '15m'
+      const options = isMinute
+        ? { minGapPct: 0.2, maxGapPct: 5.0, recentOnly: false }
+        : { minGapPct: 0.3, maxGapPct: 5.0, recentOnly: false }
 
-      const fvgPatterns = detectFvgPatterns(visibleData, options)
+      // Detect patterns on FULL dataset so overlays persist across zoom/pan
+      const fvgPatterns = detectFvgPatterns(data, options)
       drawFvgPatterns(ctx, fvgPatterns, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, visibleRange.start)
 
       // Notify parent of FVG count
       if (onFvgCountChange) {
-        onFvgCountChange(fvgPatterns.length)
+        // Count patterns that intersect the visible window (allowing forward extension)
+        const gapExtendCandles = 30
+        const start = visibleRange.start - gapExtendCandles
+        const end = visibleRange.end
+        const visibleCount = fvgPatterns.filter(p => p.startIndex >= start && p.startIndex < end).length
+        onFvgCountChange(visibleCount)
       }
     } else if (!showFvg && onFvgCountChange) {
       onFvgCountChange(0)
