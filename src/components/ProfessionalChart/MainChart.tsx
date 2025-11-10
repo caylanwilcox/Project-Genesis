@@ -116,7 +116,7 @@ export const MainChart: React.FC<MainChartProps> = ({
       drawMarketHoursBackground(ctx, visibleData, padding, chartWidth, chartHeight, baseWidth)
     }
 
-    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth)
+    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange)
 
     const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
     const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0

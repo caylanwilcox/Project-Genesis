@@ -2,10 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
   typescript: {
-    ignoreBuildErrors: true, // Temporarily ignore TS errors in scripts during Vercel build
+    ignoreBuildErrors: true, // Ignore type errors in backend services/scripts during Vercel build
   },
   eslint: {
-    ignoreDuringBuilds: true, // Temporarily ignore ESLint during build
+    ignoreDuringBuilds: true, // Skip linting during build for faster deployment
   },
 }
 

@@ -203,7 +203,7 @@ export class PredictionsRepository {
       modelName,
       totalPredictions: result._count.id,
       correctPredictions,
-      accuracy: result._avg.accuracy || 0,
+      accuracy: Number(result._avg.accuracy) || 0,
       avgConfidence: Number(result._avg.confidence) || 0,
     }
   }

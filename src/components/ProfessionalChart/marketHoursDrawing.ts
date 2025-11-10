@@ -3,8 +3,7 @@
  * Draws colored background overlays for market open (green) and closed (red) hours
  */
 
-import { CandleData } from './types'
-import { ChartPadding } from './canvasRendering'
+import { CandleData, ChartPadding } from './types'
 import { getMarketHoursSegments, getMarketHoursSegmentsWithDuration, MarketHoursConfig, DEFAULT_MARKET_HOURS } from '@/utils/marketHours'
 
 /**
