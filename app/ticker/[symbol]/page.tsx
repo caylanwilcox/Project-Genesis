@@ -269,7 +269,7 @@ export default function TickerPage() {
       const analyzeFvgWindow = (data: any[]): { signal: 'Bullish' | 'Bearish' | 'Neutral'; count: number; confidence: number } => {
       if (data.length < 10) return { signal: 'Neutral', count: 0, confidence: 0 }
 
-        const patterns = detectFvgPatterns(data, { recentOnly: true, minGapPct: 1.5, maxGapPct: 8.0 })
+        const patterns = detectFvgPatterns(data, { recentOnly: true, minGapPct: 0.15, maxGapPct: 3.0 })
 
       if (patterns.length === 0) return { signal: 'Neutral', count: 0, confidence: 0 }
 
