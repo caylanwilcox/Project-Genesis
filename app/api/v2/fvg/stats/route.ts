@@ -8,6 +8,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { fvgDetectionRepo } from '@/repositories'
+
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
 import type { TradingMode } from '@/services/fvgDetectionService'
 
 export async function GET(request: NextRequest) {

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { dataIngestionService } from '@/services/dataIngestionService'
 import { Timeframe } from '@/types/polygon'
 
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/data/market?ticker=SPY&timeframe=1h&limit=100
  * Fetch market data from database

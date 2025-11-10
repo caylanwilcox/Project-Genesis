@@ -3,6 +3,9 @@ import { dataIngestionServiceV2 } from '@/services/dataIngestionService.v2'
 import { marketDataRepo } from '@/repositories'
 import { Timeframe } from '@/types/polygon'
 
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
+
 /**
  * POST /api/v2/data/backfill
  * Backfill historical data with train/test split

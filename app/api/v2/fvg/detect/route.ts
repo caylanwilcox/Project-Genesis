@@ -8,6 +8,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { marketDataRepo, fvgDetectionRepo } from '@/repositories'
+
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
 import { FvgDetectionService, TradingMode } from '@/services/fvgDetectionService'
 
 export async function POST(request: NextRequest) {

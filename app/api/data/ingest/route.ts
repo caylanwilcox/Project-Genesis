@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { dataIngestionService } from '@/services/dataIngestionService'
 import { Timeframe } from '@/types/polygon'
 
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
+
 /**
  * POST /api/data/ingest
  * Trigger data ingestion for specified tickers

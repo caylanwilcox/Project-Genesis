@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { dataIngestionServiceV2 } from '@/services/dataIngestionService.v2'
 
+// Force dynamic rendering - don't pre-render at build time
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/v2/data/ingest/status
  * Check ingestion status and data availability (Prisma version)
