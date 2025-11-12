@@ -8,6 +8,7 @@ export interface ProfessionalChartProps {
   onDataUpdate?: (data: CandleData[]) => void
   onTimeframeChange?: (tf: string, displayTf: string) => void
   showFvg?: boolean
+  fvgPercentage?: number
   onFvgCountChange?: (count: number) => void
   onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
   onLoadMoreData?: () => void

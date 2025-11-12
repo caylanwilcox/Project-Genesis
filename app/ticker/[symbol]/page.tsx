@@ -52,6 +52,7 @@ export default function TickerPage() {
   const [timeframe, setTimeframe] = useState<Timeframe>(initialResolved.timeframe)
   const [showFvg, setShowFvg] = useState(false)
   const [fvgCount, setFvgCount] = useState(0)
+  const [fvgPercentage, setFvgPercentage] = useState(0.3) // Default 0.3%
   const [showBacktest, setShowBacktest] = useState(false)
   const [visibleBarCount, setVisibleBarCount] = useState(0)
   const [visibleChartData, setVisibleChartData] = useState<any[]>([])
@@ -652,6 +653,26 @@ export default function TickerPage() {
               >
                 {showFvg ? '✓ FVG Detection ON' : 'FVG Detection OFF'}
               </button>
+              {showFvg && (
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800/50 border border-gray-700">
+                  <label htmlFor="fvg-percentage" className="text-xs font-semibold text-gray-400 whitespace-nowrap">
+                    Gap %:
+                  </label>
+                  <input
+                    id="fvg-percentage"
+                    type="range"
+                    min="0.1"
+                    max="2.0"
+                    step="0.1"
+                    value={fvgPercentage}
+                    onChange={(e) => setFvgPercentage(parseFloat(e.target.value))}
+                    className="w-24 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                  />
+                  <span className="text-xs font-semibold text-green-400 min-w-[2.5rem]">
+                    {fvgPercentage.toFixed(1)}%
+                  </span>
+                </div>
+              )}
               <button
                 onClick={() => setShowBacktest(true)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-purple-500/20 text-purple-400 border border-purple-500 hover:bg-purple-500/30"
@@ -673,6 +694,7 @@ export default function TickerPage() {
               entryPoint={livePrice}
               data={chartData.length > 0 ? chartData : undefined}
               showFvg={showFvg}
+              fvgPercentage={fvgPercentage}
               onFvgCountChange={setFvgCount}
               onVisibleBarCountChange={(count, data) => {
                 setVisibleBarCount(count)

@@ -24,6 +24,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
   onDataUpdate,
   onTimeframeChange,
   showFvg = false,
+  fvgPercentage = 0.3,
   onFvgCountChange,
   onVisibleBarCountChange,
   onLoadMoreData
@@ -138,7 +139,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = ({
         onTouchMove={(e) => handleTouchMove(e, e.currentTarget.getBoundingClientRect())} onTouchEnd={handleTouchEnd}>
         <MainChart data={data} visibleRange={visibleRange} priceScale={priceScale} timeScale={timeScale}
           stopLoss={stopLoss} entryPoint={entryPoint} targets={targets} dataTimeframe={dataTimeframe}
-          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} showFvg={showFvg} onFvgCountChange={onFvgCountChange} onVisibleBarCountChange={onVisibleBarCountChange} priceOffset={priceOffset} />
+          displayTimeframe={timeframe} onOverlayTagsUpdate={setOverlayTags} mousePos={mousePos} isPanning={isPanning} showFvg={showFvg} fvgPercentage={fvgPercentage} onFvgCountChange={onFvgCountChange} onVisibleBarCountChange={onVisibleBarCountChange} priceOffset={priceOffset} />
         <div className={tagStyles.yAxisTagsContainer}>
           {overlayTags.map((tag, idx) => (
             <div key={idx} className={`${tagStyles.yAxisTag} ${tagStyles[`yAxisTag--${tag.kind}`]}`} style={{ top: `${tag.y - 11}px` }}>
