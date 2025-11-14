@@ -367,6 +367,18 @@ class PolygonService {
 
     // Handle special display timeframes
     if (displayTimeframe) {
+      // Handle WEEK_X format (e.g., WEEK_1, WEEK_2)
+      if (displayTimeframe.startsWith('WEEK_')) {
+        const weeksBack = parseInt(displayTimeframe.split('_')[1]) || 0;
+        // Go back X weeks from today
+        date.setDate(date.getDate() - (weeksBack * 7));
+        // Get one week of data centered around that date
+        const weekStart = new Date(date);
+        weekStart.setDate(weekStart.getDate() - 3); // Go back 3 days to center the week
+        console.log(`[PolygonService] ${displayTimeframe}: From ${weekStart.toISOString()} to ${date.toISOString()}`);
+        return weekStart;
+      }
+
       switch (displayTimeframe) {
         case 'YTD':
           // Year to date - January 1st of current year

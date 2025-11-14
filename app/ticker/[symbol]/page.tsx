@@ -57,10 +57,37 @@ export default function TickerPage() {
   const [visibleBarCount, setVisibleBarCount] = useState(0)
   const [visibleChartData, setVisibleChartData] = useState<any[]>([])
   const [additionalBarsToLoad, setAdditionalBarsToLoad] = useState(0)
+  const [weeksBack, setWeeksBack] = useState(0) // 0 = current week, 1 = last week, etc.
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   // Centralized policy determines bar limits
   const getBarLimit = (tf: Timeframe, displayTf: string): number =>
     recommendedBarLimit(tf, displayTf) + additionalBarsToLoad
+
+  // Navigate to previous week
+  const goToPreviousWeek = () => {
+    setWeeksBack(prev => prev + 1)
+  }
+
+  // Navigate to next week
+  const goToNextWeek = () => {
+    setWeeksBack(prev => Math.max(0, prev - 1))
+  }
+
+  // Go to current week
+  const goToCurrentWeek = () => {
+    setWeeksBack(0)
+    setSelectedDate(null)
+  }
+
+  // Jump to specific date
+  const jumpToDate = (date: Date) => {
+    setSelectedDate(date)
+    const now = new Date()
+    const diffTime = now.getTime() - date.getTime()
+    const diffWeeks = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000))
+    setWeeksBack(Math.max(0, diffWeeks))
+  }
 
   // Handler for when user scrolls to left edge - load exactly 100 more bars
   const handleLoadMoreData = () => {
@@ -85,9 +112,10 @@ export default function TickerPage() {
     ticker: symbol?.toUpperCase() || '',
     timeframe,
     limit: getBarLimit(timeframe, displayTimeframe),
-    autoRefresh: true,
+    autoRefresh: weeksBack === 0, // Only auto-refresh when viewing current week
     refreshInterval: recommendedRefreshMs(timeframe),
     displayTimeframe, // Pass display timeframe for accurate date range calculation
+    weeksBack, // Pass weeks back to fetch historical data
   })
 
   // Live price from snapshot (paid plan) every 5s; falls back gracefully if unavailable
@@ -635,6 +663,60 @@ export default function TickerPage() {
               </div>
             </div>
           )}
+          {/* Week Navigation Controls */}
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goToPreviousWeek}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800/50 text-gray-300 border border-gray-700 hover:bg-gray-700/50 transition-colors"
+                title="Previous Week"
+              >
+                ← Previous Week
+              </button>
+              <button
+                onClick={goToNextWeek}
+                disabled={weeksBack === 0}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  weeksBack === 0
+                    ? 'bg-gray-800/30 text-gray-600 border-gray-800 cursor-not-allowed'
+                    : 'bg-gray-800/50 text-gray-300 border-gray-700 hover:bg-gray-700/50'
+                }`}
+                title="Next Week"
+              >
+                Next Week →
+              </button>
+              {weeksBack > 0 && (
+                <button
+                  onClick={goToCurrentWeek}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500 hover:bg-blue-500/30 transition-colors"
+                  title="Jump to Current Week"
+                >
+                  📅 Current Week
+                </button>
+              )}
+              <div className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-800/50 text-gray-400 border border-gray-700">
+                {weeksBack === 0 ? 'Current Week' : `${weeksBack} Week${weeksBack > 1 ? 's' : ''} Ago`}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="date-picker" className="text-xs font-semibold text-gray-400">
+                Jump to Date:
+              </label>
+              <input
+                id="date-picker"
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                onChange={(e) => {
+                  const date = new Date(e.target.value)
+                  if (!isNaN(date.getTime())) {
+                    jumpToDate(date)
+                  }
+                }}
+                className="px-2 py-1 rounded text-xs bg-gray-800 text-gray-300 border border-gray-700 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
           <div className="w-full mx-auto relative" style={{ height: '640px' }}>
             {/* FVG Toggle Button */}
             <div className="absolute top-14 left-2 z-10 flex items-center gap-2">
