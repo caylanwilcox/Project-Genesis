@@ -80,3 +80,79 @@ export function drawCurrentPriceLine(
 
   return { y: currentY, label: lastPrice.toFixed(2), kind: 'current' }
 }
+
+export function drawLowPriceMarker(
+  ctx: CanvasRenderingContext2D,
+  rect: DOMRect,
+  padding: any,
+  chartHeight: number,
+  minPrice: number,
+  maxPrice: number,
+  priceRange: number,
+  lowPrice: number,
+  chartWidth: number,
+  baseWidth: number,
+  candleIndex: number
+): void {
+  const lowY = padding.top + ((maxPrice - lowPrice) / priceRange) * chartHeight
+
+  // Calculate the X position of the specific candle
+  const candleWidth = chartWidth / baseWidth
+  const candleX = padding.left + (candleIndex + 0.5) * candleWidth
+
+  // Draw triangle marker pointing to the low price (similar to Webull)
+  const triangleSize = 6
+  const markerOffset = 8 // Space between candle and marker
+
+  ctx.fillStyle = '#ef4444'
+  ctx.beginPath()
+  ctx.moveTo(candleX, lowY + markerOffset)
+  ctx.lineTo(candleX - triangleSize, lowY + markerOffset + triangleSize * 2)
+  ctx.lineTo(candleX + triangleSize, lowY + markerOffset + triangleSize * 2)
+  ctx.closePath()
+  ctx.fill()
+
+  // Draw price label below the triangle
+  ctx.font = '10px monospace'
+  ctx.fillStyle = '#ef4444'
+  ctx.textAlign = 'center'
+  ctx.fillText(lowPrice.toFixed(2), candleX, lowY + markerOffset + triangleSize * 2 + 12)
+}
+
+export function drawHighPriceMarker(
+  ctx: CanvasRenderingContext2D,
+  rect: DOMRect,
+  padding: any,
+  chartHeight: number,
+  minPrice: number,
+  maxPrice: number,
+  priceRange: number,
+  highPrice: number,
+  chartWidth: number,
+  baseWidth: number,
+  candleIndex: number
+): void {
+  const highY = padding.top + ((maxPrice - highPrice) / priceRange) * chartHeight
+
+  // Calculate the X position of the specific candle
+  const candleWidth = chartWidth / baseWidth
+  const candleX = padding.left + (candleIndex + 0.5) * candleWidth
+
+  // Draw triangle marker pointing to the high price (similar to Webull)
+  const triangleSize = 6
+  const markerOffset = 8 // Space between candle and marker
+
+  ctx.fillStyle = '#22c55e'
+  ctx.beginPath()
+  ctx.moveTo(candleX, highY - markerOffset)
+  ctx.lineTo(candleX - triangleSize, highY - markerOffset - triangleSize * 2)
+  ctx.lineTo(candleX + triangleSize, highY - markerOffset - triangleSize * 2)
+  ctx.closePath()
+  ctx.fill()
+
+  // Draw price label above the triangle
+  ctx.font = '10px monospace'
+  ctx.fillStyle = '#22c55e'
+  ctx.textAlign = 'center'
+  ctx.fillText(highPrice.toFixed(2), candleX, highY - markerOffset - triangleSize * 2 - 4)
+}

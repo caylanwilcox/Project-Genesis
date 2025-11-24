@@ -195,6 +195,33 @@
   color: rgb(75 85 99);
 }
 
+.chartContainer:fullscreen,
+.chartContainer:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  min-height: 100vh;
+  max-height: 100vh;
+  margin: 0;
+  background-color: #0d0e15;
+}
+
+.chartContainer:fullscreen .chartMainArea,
+.chartContainer:-webkit-full-screen .chartMainArea {
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.chartContainer:fullscreen .chartCanvas,
+.chartContainer:-webkit-full-screen .chartCanvas {
+  height: 100%;
+}
+
+.chartContainer:fullscreen::backdrop,
+.chartContainer:-webkit-full-screen::backdrop {
+  background: #05060a;
+}
+
 .loadingIndicator {
   position: absolute;
   top: 50%;

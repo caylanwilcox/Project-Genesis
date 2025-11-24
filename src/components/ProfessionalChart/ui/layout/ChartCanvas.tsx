@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import interactionStyles from '../../../ChartInteraction.module.css'
 import { MainChart } from '../../MainChart'
 import { ZoomIndicators } from '../../ZoomIndicators'
@@ -91,6 +91,33 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
 }) => {
   const { handleResizeStart } = useHeightResize({ containerRef, onHeightChange })
   const handlers = useChartInteractionHandlers({ chartAreaRef, interaction })
+  const [chartSize, setChartSize] = useState({ width: 0, height: 0 })
+
+  useEffect(() => {
+    const node = chartAreaRef.current
+    if (!node || typeof ResizeObserver === 'undefined') {
+      if (node) {
+        const rect = node.getBoundingClientRect()
+        setChartSize({ width: rect.width, height: rect.height })
+      }
+      return
+    }
+
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0]
+      if (!entry) return
+      const { width, height } = entry.contentRect
+      setChartSize(prev => {
+        if (Math.abs(prev.width - width) < 0.5 && Math.abs(prev.height - height) < 0.5) {
+          return prev
+        }
+        return { width, height }
+      })
+    })
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [chartAreaRef])
 
   return (
     <div
@@ -124,6 +151,7 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
         onFvgCountChange={onFvgCountChange}
         onVisibleBarCountChange={onVisibleBarCountChange}
         priceOffset={priceOffset}
+        chartAreaSize={chartSize}
       />
 
       <PriceTagsOverlay tags={overlayTags} />

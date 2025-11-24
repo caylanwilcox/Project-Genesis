@@ -5,7 +5,7 @@ import { CandleData } from './types'
 import { setupCanvas, clearCanvas, calculatePadding, calculatePriceRange, formatVolume } from './canvasRendering'
 import { drawPriceGrid, drawTimeGrid } from './gridDrawing'
 import { drawCandles, drawVolumeBars } from './candleDrawing'
-import { drawPriceLines, drawCurrentPriceLine, PriceTag } from './priceLines'
+import { drawPriceLines, drawCurrentPriceLine, drawLowPriceMarker, drawHighPriceMarker, PriceTag } from './priceLines'
 import { Crosshair } from './Crosshair'
 import { detectFvgPatterns, drawFvgPatterns, findClickedFvg, FvgPattern } from './fvgDrawing'
 import { drawMarketHoursBackground } from './marketHoursDrawing'
@@ -27,6 +27,7 @@ interface MainChartProps {
   onFvgCountChange?: (count: number) => void
   onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
   priceOffset?: number
+  chartAreaSize?: { width: number; height: number }
 }
 
 export const MainChart: React.FC<MainChartProps> = ({
@@ -46,6 +47,7 @@ export const MainChart: React.FC<MainChartProps> = ({
   onFvgCountChange,
   onVisibleBarCountChange,
   priceOffset = 0,
+  chartAreaSize,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const volumeCanvasRef = useRef<HTMLCanvasElement>(null)
@@ -71,7 +73,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     const volCtx = setupCanvas(volumeCanvas)
     if (!ctx || !volCtx) return
 
-    const parentWidth = canvas.parentElement?.clientWidth || 800
+    const parentWidth = chartAreaSize?.width || canvas.parentElement?.clientWidth || 800
     const rect = canvas.getBoundingClientRect()
     const volRect = volumeCanvas.getBoundingClientRect()
 
@@ -171,6 +173,28 @@ export const MainChart: React.FC<MainChartProps> = ({
 
     if (currentTag) tags.push(currentTag)
 
+    // Draw low price marker (like Webull) - find the candle with lowest low
+    let lowestCandleIndex = 0
+    let lowestPrice = visibleData[0].low
+    visibleData.forEach((candle, index) => {
+      if (candle.low < lowestPrice) {
+        lowestPrice = candle.low
+        lowestCandleIndex = index
+      }
+    })
+    drawLowPriceMarker(ctx, rect, padding, chartHeight, minPrice, maxPrice, priceRange, lowestPrice, chartWidth, baseWidth, lowestCandleIndex)
+
+    // Draw high price marker (like Webull) - find the candle with highest high
+    let highestCandleIndex = 0
+    let highestPrice = visibleData[0].high
+    visibleData.forEach((candle, index) => {
+      if (candle.high > highestPrice) {
+        highestPrice = candle.high
+        highestCandleIndex = index
+      }
+    })
+    drawHighPriceMarker(ctx, rect, padding, chartHeight, minPrice, maxPrice, priceRange, highestPrice, chartWidth, baseWidth, highestCandleIndex)
+
     volCtx.fillStyle = '#6b7280'
     volCtx.font = isNarrow ? '7px monospace' : '9px monospace'
     volCtx.textAlign = 'center'
@@ -179,7 +203,23 @@ export const MainChart: React.FC<MainChartProps> = ({
     volCtx.fillText(formatVolume(maxVolume), volLabelX, volChartHeight - 6)
 
     onOverlayTagsUpdate(tags)
-  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate, showFvg, priceOffset, displayTimeframe, fvgPatterns])
+  }, [
+    data,
+    visibleRange,
+    priceScale,
+    timeScale,
+    stopLoss,
+    entryPoint,
+    targets,
+    dataTimeframe,
+    onOverlayTagsUpdate,
+    showFvg,
+    priceOffset,
+    displayTimeframe,
+    fvgPatterns,
+    chartAreaSize?.width,
+    chartAreaSize?.height,
+  ])
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!showFvg || isPanning) return

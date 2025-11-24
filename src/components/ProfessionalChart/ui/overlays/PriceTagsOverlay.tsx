@@ -11,9 +11,12 @@ interface PriceTagsOverlayProps {
  * Displays stop loss, entry, targets, and current price
  */
 export const PriceTagsOverlay: React.FC<PriceTagsOverlayProps> = ({ tags }) => {
+  // Filter out target tags to avoid duplication
+  const filteredTags = tags.filter(tag => tag.kind !== 'target')
+
   return (
     <div className={tagStyles.yAxisTagsContainer} aria-hidden>
-      {tags.map((tag, idx) => (
+      {filteredTags.map((tag, idx) => (
         <div
           key={`${tag.label}-${idx}`}
           className={`${tagStyles.yAxisTag} ${
