@@ -7,7 +7,7 @@ import { drawPriceGrid, drawTimeGrid } from './gridDrawing'
 import { drawCandles, drawVolumeBars } from './candleDrawing'
 import { drawPriceLines, drawCurrentPriceLine, PriceTag } from './priceLines'
 import { Crosshair } from './Crosshair'
-import { detectFvgPatterns, drawFvgPatterns } from './fvgDrawing'
+import { detectFvgPatterns, drawFvgPatterns, findClickedFvg, FvgPattern } from './fvgDrawing'
 import { drawMarketHoursBackground } from './marketHoursDrawing'
 
 interface MainChartProps {
@@ -49,6 +49,8 @@ export const MainChart: React.FC<MainChartProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const volumeCanvasRef = useRef<HTMLCanvasElement>(null)
+  const [fvgPatterns, setFvgPatterns] = useState<FvgPattern[]>([])
+  const drawnPatternsRef = useRef<FvgPattern[]>([]) // Store the patterns with dot positions after drawing
   const [chartDimensions, setChartDimensions] = useState({
     chartWidth: 0,
     chartHeight: 0,
@@ -91,11 +93,9 @@ export const MainChart: React.FC<MainChartProps> = ({
 
     const { minPrice, maxPrice, priceRange } = calculatePriceRange(visibleData, priceScale, priceOffset)
 
-    // POLICY: Detect auto-fit mode (timeScale=1.0) and use actual data length
-    // Manual mode: use fixed base of 100 candles with zoom
-    const isAutoFit = timeScale === 1.0 && visibleRange.start === 0 && visibleRange.end === data.length
-    const baseCandlesInView = 100
-    const baseWidth = isAutoFit ? visibleData.length : baseCandlesInView / timeScale
+    // POLICY: Always use visibleData.length as baseWidth for proper alignment
+    // This ensures candles fill the chart width and don't leave empty space
+    const baseWidth = visibleData.length
 
     setChartDimensions({
       chartWidth,
@@ -116,13 +116,12 @@ export const MainChart: React.FC<MainChartProps> = ({
       drawMarketHoursBackground(ctx, visibleData, padding, chartWidth, chartHeight, baseWidth)
     }
 
-    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange)
+    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth)
 
     const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
     const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0
-    const candleWidth = chartWidth / visibleData.length
 
-    drawVolumeBars(volCtx, visibleData, candleWidth, volChartHeight, maxVolume, padding, chartWidth)
+    drawVolumeBars(volCtx, visibleData, volChartHeight, maxVolume, padding, chartWidth, baseWidth)
 
     // Draw FVG patterns if enabled
     if (showFvg && data.length >= 3) {
@@ -133,8 +132,23 @@ export const MainChart: React.FC<MainChartProps> = ({
         : { minGapPct: 0.3, maxGapPct: 5.0, recentOnly: false }
 
       // Detect patterns on FULL dataset so overlays persist across zoom/pan
-      const fvgPatterns = detectFvgPatterns(data, options)
-      drawFvgPatterns(ctx, fvgPatterns, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, visibleRange.start)
+      const detectedPatterns = detectFvgPatterns(data, options)
+
+      // Merge with existing state to preserve expanded status
+      const mergedPatterns = detectedPatterns.map(detected => {
+        const existing = fvgPatterns.find(p => p.id === detected.id)
+        return existing ? { ...detected, expanded: existing.expanded } : detected
+      })
+
+      // Update state if patterns changed
+      if (JSON.stringify(mergedPatterns.map(p => p.id)) !== JSON.stringify(fvgPatterns.map(p => p.id))) {
+        setFvgPatterns(mergedPatterns)
+      }
+
+      drawFvgPatterns(ctx, mergedPatterns, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, visibleRange.start)
+
+      // Store the drawn patterns with their dot positions for click detection
+      drawnPatternsRef.current = mergedPatterns
 
       // Notify parent of FVG count
       if (onFvgCountChange) {
@@ -142,7 +156,7 @@ export const MainChart: React.FC<MainChartProps> = ({
         const gapExtendCandles = 30
         const start = visibleRange.start - gapExtendCandles
         const end = visibleRange.end
-        const visibleCount = fvgPatterns.filter(p => p.startIndex >= start && p.startIndex < end).length
+        const visibleCount = mergedPatterns.filter(p => p.startIndex >= start && p.startIndex < end).length
         onFvgCountChange(visibleCount)
       }
     } else if (!showFvg && onFvgCountChange) {
@@ -165,11 +179,49 @@ export const MainChart: React.FC<MainChartProps> = ({
     volCtx.fillText(formatVolume(maxVolume), volLabelX, volChartHeight - 6)
 
     onOverlayTagsUpdate(tags)
-  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate, showFvg, onVisibleBarCountChange, priceOffset])
+  }, [data, visibleRange, priceScale, timeScale, stopLoss, entryPoint, targets, dataTimeframe, onOverlayTagsUpdate, showFvg, priceOffset, displayTimeframe, fvgPatterns])
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!showFvg || isPanning) return
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const rect = canvas.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const clickY = e.clientY - rect.top
+
+    console.log('[FVG Click] Click at:', { clickX, clickY })
+    console.log('[FVG Click] Drawn patterns:', drawnPatternsRef.current.map(p => ({
+      id: p.id,
+      expanded: p.expanded,
+      dotX: (p as any).dotX,
+      dotY: (p as any).dotY,
+      dotRadius: (p as any).dotRadius
+    })))
+
+    // Find if any FVG dot was clicked (use drawn patterns which have dot positions)
+    const clickedFvg = findClickedFvg(drawnPatternsRef.current, clickX, clickY)
+    console.log('[FVG Click] Clicked FVG:', clickedFvg?.id)
+
+    if (clickedFvg) {
+      // Toggle the expanded state
+      setFvgPatterns(patterns =>
+        patterns.map(p =>
+          p.id === clickedFvg.id ? { ...p, expanded: !p.expanded } : p
+        )
+      )
+      console.log('[FVG Click] Toggled expanded state for:', clickedFvg.id)
+    }
+  }
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: 'calc(100% - 80px)' }} />
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: 'calc(100% - 80px)', cursor: showFvg ? 'pointer' : 'default' }}
+        onClick={handleCanvasClick}
+      />
       <canvas ref={volumeCanvasRef} style={{ width: '100%', height: '80px' }} />
       <Crosshair
         mousePos={mousePos}

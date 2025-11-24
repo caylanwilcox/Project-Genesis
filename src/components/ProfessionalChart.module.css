@@ -138,6 +138,8 @@
   flex-grow: 1;
   position: relative;
   overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .chartMainArea.panning {
@@ -191,4 +193,35 @@
 
 .timeSeparator {
   color: rgb(75 85 99);
+}
+
+.loadingIndicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(13, 14, 21, 0.9);
+  border: 1px solid rgb(31 41 55);
+  border-radius: 8px;
+  padding: 12px 20px;
+  color: rgb(156 163 175);
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.loadingSpinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgb(31 41 55);
+  border-top-color: rgb(59 130 246);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

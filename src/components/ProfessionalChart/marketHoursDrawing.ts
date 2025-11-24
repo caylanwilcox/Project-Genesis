@@ -45,13 +45,9 @@ export function drawMarketHoursBackground(
   // Use duration-aware segmentation so 1h bars overlapping 9:30–4:00 render as open.
   const segments = getMarketHoursSegmentsWithDuration(visibleData, barDurationMs, config)
 
-  // Match candle positioning logic so backgrounds don't drift while zooming/panning
-  // Use the larger of baseWidth or actual visible data length
-  const effectiveWidth = Math.max(baseWidth, visibleData.length)
-  const candleWidth = chartWidth / effectiveWidth
-  // When zoomed out (effectiveWidth > visibleData.length), candles shift right;
-  // apply the same leftOffset so backgrounds align with candles.
-  const leftOffset = (effectiveWidth - visibleData.length) * candleWidth
+  // Calculate candle width to match candle drawing (no offset)
+  const candleWidth = chartWidth / visibleData.length
+  const leftOffset = 0  // No offset needed since baseWidth = visibleData.length
   const chartTop = padding.top
   const chartBottom = padding.top + chartHeight
 
@@ -64,10 +60,10 @@ export function drawMarketHoursBackground(
     const width = endX - startX
 
     // Set color based on market status
-    // Green with low opacity for open hours, red for closed hours
+    // Use very subtle opacity - just a hint of color, not a dark overlay
     ctx.fillStyle = isOpen
-      ? 'rgba(34, 197, 94, 0.05)'  // Green with 5% opacity for open hours
-      : 'rgba(239, 68, 68, 0.08)'   // Red with 8% opacity for closed hours
+      ? 'rgba(34, 197, 94, 0.03)'  // Green with 3% opacity for open hours (very subtle)
+      : 'rgba(239, 68, 68, 0.03)'   // Red with 3% opacity for closed hours (very subtle)
 
     // Draw rectangle covering the time segment
     ctx.fillRect(startX, chartTop, width, chartHeight)

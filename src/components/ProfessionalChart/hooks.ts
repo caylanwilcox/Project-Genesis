@@ -1,6 +1,5 @@
 import { useCallback, useState, useEffect } from 'react'
 import { CandleData } from './types'
-import { Timeframe } from '@/types/polygon'
 
 export function useFullscreen(containerRef: React.RefObject<HTMLDivElement>) {
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -52,14 +51,12 @@ export function useChartData(externalData: CandleData[] | undefined, currentPric
 
   useEffect(() => {
     if (externalData && externalData.length > 0) {
-      console.log(`[useChartData] Setting external data: ${externalData.length} bars`)
       // Only update if data is actually different (prevents flash of old data)
       setData(prevData => {
         // Check if data has actually changed
         if (prevData.length === externalData.length &&
             prevData[0]?.time === externalData[0]?.time &&
             prevData[prevData.length - 1]?.time === externalData[externalData.length - 1]?.time) {
-          console.log('[useChartData] Data unchanged, skipping update')
           return prevData
         }
         return externalData
@@ -74,6 +71,97 @@ export function useChartData(externalData: CandleData[] | undefined, currentPric
   return { data, useExternalData }
 }
 
+export function getDefaultBarsForView(
+  display?: string,
+  dataTf?: string,
+  dataLength: number = 0,
+) {
+  if (!display || !dataTf) return Math.max(100, dataLength)
+
+  if (display === '1D' && dataTf === '1m') return 390
+  if (display === '1D' && dataTf === '5m') return 78
+  if (display === '5D' && dataTf === '5m') return 390
+  if (display === '1M' && dataTf === '1h') return 140
+  if (display === '3M' && dataTf === '4h') return 100
+  if (display === '6M' && dataTf === '1d') return 126
+  if (display === 'YTD' && dataTf === '1d') return 200
+  if (display === '1Y' && dataTf === '1d') return 252
+  if (display === '5Y' && dataTf === '1w') return 260
+  if (display === 'All' && dataTf === '1M') return dataLength || 100
+
+  if (display === '1D') {
+    if (dataTf === '15m') return 26
+    if (dataTf === '30m') return 13
+    if (dataTf === '1h') return 7
+    if (dataTf === '2h') return 3
+    if (dataTf === '4h') return 2
+    if (dataTf === '1d') return 1
+  }
+
+  if (display === '5D') {
+    if (dataTf === '1m') return 1950
+    if (dataTf === '5m') return 390
+    if (dataTf === '15m') return 130
+    if (dataTf === '1h') return 33
+    if (dataTf === '2h') return 16
+    if (dataTf === '4h') return 8
+    if (dataTf === '1d') return 5
+  }
+
+  if (display === '1M') {
+    if (dataTf === '1m') return 8190
+    if (dataTf === '5m') return 1638
+    if (dataTf === '15m') return 546
+    if (dataTf === '30m') return 273
+    if (dataTf === '2h') return 68
+    if (dataTf === '4h') return 34
+    if (dataTf === '1d') return 21
+  }
+
+  if (display === '3M') {
+    if (dataTf === '1m') return 24570
+    if (dataTf === '5m') return 4914
+    if (dataTf === '15m') return 1638
+    if (dataTf === '30m') return 819
+    if (dataTf === '1h') return 410
+    if (dataTf === '2h') return 205
+    if (dataTf === '4h') return 100
+    if (dataTf === '1d') return 63
+    if (dataTf === '1w') return 13
+  }
+
+  if (display === '6M') {
+    if (dataTf === '4h') return 315
+    if (dataTf === '2h') return 630
+    if (dataTf === '1d') return 126
+    if (dataTf === '1w') return 26
+  }
+
+  if (display === 'YTD') {
+    if (dataTf === '4h') return 350
+    if (dataTf === '1d') return 200
+    if (dataTf === '1w') return 40
+  }
+
+  if (display === '1Y') {
+    if (dataTf === '4h') return 410
+    if (dataTf === '1d') return 252
+    if (dataTf === '1w') return 52
+  }
+
+  if (display === '5Y') {
+    if (dataTf === '1d') return 1260
+    if (dataTf === '1w') return 260
+    if (dataTf === '1M') return 60
+  }
+
+  if (display === 'All') {
+    return dataLength || 100
+  }
+
+  return Math.max(100, dataLength)
+}
+
 export function useVisibleRange(
   data: CandleData[],
   panOffset: number,
@@ -86,66 +174,35 @@ export function useVisibleRange(
   useEffect(() => {
     if (data.length === 0) return
 
-    // POLICY: Auto-fit mode when timeScale=1.0 and panOffset=0
-    // Shows last N bars based on displayTimeframe to align with UX expectations
-    const shouldAutoFit = timeScale === 1.0 && panOffset === 0
+    const baseCandlesInView = getDefaultBarsForView(displayTimeframe, dataTimeframe, data.length)
+    const zoomedCandlesInView = Math.round(baseCandlesInView / timeScale) // timeScale > 1 = zoom in (fewer candles), < 1 = zoom out (more candles)
+    const effectiveCandlesInView = Math.max(20, Math.min(data.length, zoomedCandlesInView)) // Clamp to reasonable range
 
-    // Determine default bars per display timeframe
-    const getDefaultBarsForView = (display?: string, dataTf?: string): number => {
-      if (!display || !dataTf) return 100
+    // panOffset = how many candles we've scrolled back from the latest data
+    const scrollBack = Math.max(0, Math.floor(panOffset))
 
-      // 1-minute chart configurations - show all available data
-      if (dataTf === '1m') {
-        if (display === '1D') return Math.min(data.length, 390) // Full trading day (6.5 hours)
-        if (display === '5D') return Math.min(data.length, 1950) // 5 trading days
-        if (display === '1M') return Math.min(data.length, 8190) // ~21 trading days
-        return Math.min(data.length, 390) // Default to 1 day for other timeframes
-      }
+    // Calculate visible range - the window size can change based on zoom (timeScale),
+    // and slides through the entire dataset as user pans left/right
+    //
+    // CRITICAL: When panOffset = 0, we MUST show the most recent data
+    // The end should ALWAYS be data.length when not panning (panOffset = 0)
+    // The start should be calculated backwards from the end
+    //
+    // When panOffset = 0: end = data.length (show most recent)
+    // When panOffset > 0: end = data.length - scrollBack (scroll back in time)
+    const end = data.length - scrollBack
+    const start = end - effectiveCandlesInView
 
-      // 5-minute chart configurations
-      if (dataTf === '5m') {
-        if (display === '1D') return Math.min(data.length, 78) // 6.5 hours
-        if (display === '5D') return Math.min(data.length, 390) // 5 days
-        return 30
-      }
+    // Clamp to valid data range
+    // IMPORTANT: actualEnd must ALWAYS equal end when scrollBack = 0
+    // This ensures we ALWAYS show the most recent data when panOffset = 0
+    // Even if start is negative (less data than desired view), we keep end anchored
+    const actualEnd = Math.max(0, Math.min(data.length, end))
+    const actualStart = Math.max(0, start)
 
-      // Other timeframe configurations
-      if (display === '1D' && dataTf === '15m') return 30 // ~trading day
-      if (display === '5D' && dataTf === '1h') return 40
-      if (display === '1M' && dataTf === '4h') return 44
-      if (display === '3M' && dataTf === '1d') return 63
-      if (display === '6M' && dataTf === '1d') return 126
-      if (display === 'YTD' && dataTf === '1d') return 200
-      if (display === '1Y' && dataTf === '1d') return 252
-      if (display === '5Y' && dataTf === '1w') return 260
-      if (display === 'All' && dataTf === '1M') return data.length
-      return 100
-    }
-
-    let effectiveCandlesInView: number
-    let scrollBack: number
-
-    const baseCandlesInView = getDefaultBarsForView(displayTimeframe, dataTimeframe)
-
-    if (shouldAutoFit) {
-      // Auto-fit mode: show last N bars based on timeframe defaults
-      effectiveCandlesInView = Math.min(baseCandlesInView, data.length)
-      scrollBack = 0
-    } else {
-      // Manual zoom/pan mode: scale relative to default view
-      const candlesInView = Math.round(baseCandlesInView / timeScale)
-
-      // panOffset = how far back in time we've scrolled
-      effectiveCandlesInView = candlesInView
-      scrollBack = Math.max(0, panOffset)
-    }
-
-    // Calculate visible range - end at latest data minus scroll back
-    const end = Math.min(data.length, data.length - scrollBack)
-    const start = Math.max(0, end - effectiveCandlesInView)
-
-    setVisibleRange({ start, end })
-  }, [panOffset, data.length, timeScale, displayTimeframe, dataTimeframe])
+    console.log(`[📊 VIEWPORT] Showing bars ${actualStart}-${actualEnd} of ${data.length} (panOffset=${panOffset.toFixed(0)})`)
+    setVisibleRange({ start: actualStart, end: actualEnd })
+  }, [panOffset, data.length, displayTimeframe, dataTimeframe, timeScale])
 
   return visibleRange
 }

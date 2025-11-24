@@ -2,13 +2,22 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { usePolygonData, usePolygonSnapshot } from '@/hooks/usePolygonData'
+import { usePolygonWebSocket, aggregateBarToChartData } from '@/hooks/usePolygonWebSocket'
 import { polygonService } from '@/services/polygonService'
+import { polygonWebSocketService, AggregateBar } from '@/services/polygonWebSocket'
 import { NormalizedChartData, Timeframe } from '@/types/polygon'
-import { resolveDisplayToData, recommendedRefreshMs, recommendedBarLimit } from '@/utils/timeframePolicy'
+import {
+  resolveDisplayToData,
+  recommendedRefreshMs,
+  recommendedBarLimit,
+  intervalLabelToDisplayTimeframe,
+} from '@/utils/timeframePolicy'
 import { detectFvgPatterns } from '@/components/ProfessionalChart/fvgDrawing'
+import { getFvgGapSettingsForTimeframe } from '@/utils/fvgThresholdPolicy'
+import { aggregateBarsToDuration, INTRADAY_TIMEFRAMES, mergeCandlesReplacing, TIMEFRAME_IN_MS } from '@/hooks/polygonRealtimeUtils'
 
 const ProfessionalChart = dynamic(() => import('@/components/ProfessionalChart').then(m => m.ProfessionalChart), {
   ssr: false,
@@ -21,6 +30,13 @@ const FvgBacktestPanel = dynamic(() => import('@/components/FvgBacktestPanel').t
 const FvgStrategyPanel = dynamic(() => import('@/components/FvgStrategyPanel').then(m => m.FvgStrategyPanel), {
   ssr: false,
 })
+
+const formatVolumeValue = (value: number) => {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`
+  return value.toFixed(0)
+}
 
 interface TimeframeAnalysis {
   timeframe: string
@@ -46,31 +62,70 @@ export default function TickerPage() {
   const symbol = params?.symbol as string
   const [ticker, setTicker] = useState<TickerDetails | null>(null)
   const [livePrice, setLivePrice] = useState(0)
-  const [sessionOpen, setSessionOpen] = useState<number | null>(null)
-  const [displayTimeframe, setDisplayTimeframe] = useState<string>('1D')
-  const initialResolved = resolveDisplayToData('1D')
+  const defaultDisplayTimeframe = '1D'
+  const [displayTimeframe, setDisplayTimeframe] = useState<string>(defaultDisplayTimeframe)
+  const [dataDisplayTimeframe, setDataDisplayTimeframe] = useState<string>(defaultDisplayTimeframe)
+  const initialResolved = resolveDisplayToData(defaultDisplayTimeframe)
   const [timeframe, setTimeframe] = useState<Timeframe>(initialResolved.timeframe)
+  const initialFvgSettings = getFvgGapSettingsForTimeframe(initialResolved.timeframe)
   const [showFvg, setShowFvg] = useState(false)
   const [fvgCount, setFvgCount] = useState(0)
+  const [fvgPercentage, setFvgPercentage] = useState(initialFvgSettings.defaultValue)
   const [showBacktest, setShowBacktest] = useState(false)
   const [visibleBarCount, setVisibleBarCount] = useState(0)
   const [visibleChartData, setVisibleChartData] = useState<any[]>([])
   const [additionalBarsToLoad, setAdditionalBarsToLoad] = useState(0)
+  const [isLoadingMoreData, setIsLoadingMoreData] = useState(false)
+  const [lastTradeTime, setLastTradeTime] = useState<number>(0)
+  const [tradeCount, setTradeCount] = useState(0)
+  const [priceFlash, setPriceFlash] = useState<'up' | 'down' | null>(null)
+  const fvgGapSettings = useMemo(() => getFvgGapSettingsForTimeframe(timeframe), [timeframe])
+  const fvgDisplayPrecision = useMemo(() => (fvgGapSettings.step < 0.1 ? 2 : 1), [fvgGapSettings.step])
+  const formatFvgPercent = (value: number, precision = value < 1 ? 2 : 1) => value.toFixed(precision)
 
   // Centralized policy determines bar limits
-  const getBarLimit = (tf: Timeframe, displayTf: string): number =>
-    recommendedBarLimit(tf, displayTf) + additionalBarsToLoad
+  const getBarLimit = (tf: Timeframe): number => {
+    const baseLimit = recommendedBarLimit(tf, dataDisplayTimeframe)
+    const total = baseLimit + additionalBarsToLoad
+    console.log(`[⚙️ LIMIT] ${tf}/${dataDisplayTimeframe}: ${baseLimit} + ${additionalBarsToLoad} = ${total} bars`)
+    return total
+  }
 
   // Handler for when user scrolls to left edge - load exactly 100 more bars
-  const handleLoadMoreData = () => {
+  const handleLoadMoreData = useCallback(() => {
     // Maximum 1000 additional bars to prevent overload
     if (additionalBarsToLoad < 1000) {
+      setIsLoadingMoreData(true)
       setAdditionalBarsToLoad(prev => prev + 100)
       console.log(`[InfiniteScroll] Loading 100 more bars. Total additional: ${additionalBarsToLoad + 100}`)
     } else {
       console.log('[InfiniteScroll] Maximum bar limit (1000 additional bars) reached')
     }
-  }
+  }, [additionalBarsToLoad])
+
+  // Handler for visible bar count changes - memoized to prevent infinite loops
+  const handleVisibleBarCountChange = useCallback((count: number, data: any[]) => {
+    setVisibleBarCount(prev => (prev === count ? prev : count))
+    setVisibleChartData(prev => {
+      if (
+        prev.length === data.length &&
+        prev[0]?.time === data[0]?.time &&
+        prev[prev.length - 1]?.time === data[data.length - 1]?.time
+      ) {
+        return prev
+      }
+      return data
+    })
+  }, [])
+
+  const chartTargets = useMemo(() => {
+    if (livePrice <= 0) return []
+    return [
+      livePrice * 1.005, // +0.5%
+      livePrice * 1.01,  // +1.0%
+      livePrice * 1.02,  // +2.0%
+    ]
+  }, [livePrice])
 
   // Fetch real polygon.io data with dynamic limit based on timeframe
   const {
@@ -83,17 +138,83 @@ export default function TickerPage() {
   } = usePolygonData({
     ticker: symbol?.toUpperCase() || '',
     timeframe,
-    limit: getBarLimit(timeframe, displayTimeframe),
+    limit: getBarLimit(timeframe),
     autoRefresh: true,
     refreshInterval: recommendedRefreshMs(timeframe),
-    displayTimeframe, // Pass display timeframe for accurate date range calculation
+    displayTimeframe: dataDisplayTimeframe, // Pass display timeframe for accurate date range calculation
   })
+
+  // Clear loading state when data finishes loading
+  useEffect(() => {
+    if (!isPolygonLoading && isLoadingMoreData) {
+      setIsLoadingMoreData(false)
+      console.log('[InfiniteScroll] Data loaded, clearing loading indicator')
+    }
+  }, [isPolygonLoading, isLoadingMoreData])
+
+  // WebSocket connection for real-time streaming - ALWAYS enabled
+  const handleWsBar = useCallback((bar: AggregateBar) => {
+    console.log('[TickerPage] WebSocket bar received:', bar);
+  }, [])
+
+  const {
+    isConnected: wsConnected,
+    latestBar: wsLatestBar,
+    error: wsError,
+  } = usePolygonWebSocket({
+    ticker: symbol?.toUpperCase() || '',
+    enabled: true, // Always enable WebSocket for rapid updates
+    onBar: handleWsBar,
+  })
+
+  // Merge WebSocket data with existing polygon data
+  const [wsChartData, setWsChartData] = useState<NormalizedChartData[]>([])
+
+  useEffect(() => {
+    if (!wsLatestBar) {
+      setWsChartData([])
+      return
+    }
+
+    const newBar = aggregateBarToChartData(wsLatestBar)
+
+    setWsChartData(prev => {
+      const existingIndex = prev.findIndex(bar => bar.time === newBar.time)
+
+      if (existingIndex >= 0) {
+        const updated = [...prev]
+        updated[existingIndex] = newBar
+        return updated
+      } else {
+        const updated = [...prev, newBar].slice(-500)
+        return updated
+      }
+    })
+  }, [wsLatestBar])
+
+  const realtimeBarsForView = useMemo(() => {
+    if (wsChartData.length === 0) return []
+    if (!INTRADAY_TIMEFRAMES.includes(timeframe)) return wsChartData
+    if (timeframe === '1m') return wsChartData
+    const bucketMs = TIMEFRAME_IN_MS[timeframe]
+    if (!bucketMs) return wsChartData
+    return aggregateBarsToDuration(wsChartData, bucketMs)
+  }, [wsChartData, timeframe])
+
+  const finalPolygonData = useMemo(() => {
+    if (realtimeBarsForView.length === 0) {
+      return polygonData
+    }
+    const merged = mergeCandlesReplacing(polygonData, realtimeBarsForView)
+    console.log(`[TickerPage] Applied ${realtimeBarsForView.length} realtime bars onto ${polygonData.length} historical bars → ${merged.length}`)
+    return merged
+  }, [polygonData, realtimeBarsForView])
 
   // Live price from snapshot (paid plan) every 5s; falls back gracefully if unavailable
   const { snapshot } = usePolygonSnapshot(symbol?.toUpperCase() || '', 5000)
 
   // Transform polygon data to chart format
-  const chartData = polygonData.map((bar: NormalizedChartData) => ({
+  const chartData = finalPolygonData.map((bar: NormalizedChartData) => ({
     time: bar.time,
     open: bar.open,
     high: bar.high,
@@ -377,52 +498,40 @@ export default function TickerPage() {
 
   const timeframeSignals = calculateTimeframeSignals()
 
-  // Calculate current volume and price range from polygon data
-  const currentVolume = polygonData.length > 0 ? polygonData[polygonData.length - 1].volume : 0
-  const volumeStr = currentVolume >= 1000000
-    ? `${(currentVolume / 1000000).toFixed(1)}M`
-    : currentVolume >= 1000
-    ? `${(currentVolume / 1000).toFixed(1)}K`
-    : currentVolume.toFixed(0)
-
   // Calculate today's high/low from recent data
-  const recentBars = polygonData.slice(-24) // Last 24 hours of 1h bars
-  const todayHigh = recentBars.length > 0 ? Math.max(...recentBars.map(b => b.high)) : livePrice
-  const todayLow = recentBars.length > 0 ? Math.min(...recentBars.map(b => b.low)) : livePrice
+  const activeChartData = useMemo(() => {
+    if (finalPolygonData.length === 0) return []
+    const limit = recommendedBarLimit(timeframe, dataDisplayTimeframe)
+    return finalPolygonData.slice(-limit)
+  }, [finalPolygonData, timeframe, dataDisplayTimeframe])
 
-  // Derive session open price (prefer snapshot; fallback to aggregates for today's first bar in ET)
-  useEffect(() => {
-    // Prefer snapshot day open when available
-    const snapOpen = snapshot?.day?.o
-    if (snapOpen && typeof snapOpen === 'number') {
-      setSessionOpen(snapOpen)
-      return
-    }
-
-    if (polygonData.length === 0) return
-
-    try {
-      // Find earliest bar from the latest ET trading day in loaded data
-      const toEtDate = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      const latestEtDate = toEtDate(polygonData[polygonData.length - 1].time)
-      // Walk back to find the first bar of that ET date
-      let firstIdx = polygonData.length - 1
-      for (let i = polygonData.length - 2; i >= 0; i--) {
-        if (toEtDate(polygonData[i].time) !== latestEtDate) break
-        firstIdx = i
+  const viewStats = useMemo(() => {
+    if (activeChartData.length === 0) {
+      return {
+        open: livePrice,
+        high: livePrice,
+        low: livePrice,
+        close: livePrice,
+        volume: 0,
+        lastVolume: 0,
       }
-      const firstBar = polygonData[firstIdx]
-      if (firstBar) setSessionOpen(firstBar.open)
-    } catch (e) {
-      // Fallback: fetch daily bar and use its open
-      (async () => {
-        try {
-          const daily = await polygonService.getAggregates(symbol?.toUpperCase() || '', '1d', 1)
-          if (daily && daily.length > 0) setSessionOpen(daily[daily.length - 1].open)
-        } catch {}
-      })()
     }
-  }, [snapshot, polygonData, symbol])
+    const highs = activeChartData.map(b => b.high)
+    const lows = activeChartData.map(b => b.low)
+    const totalVolume = activeChartData.reduce((sum, bar) => sum + bar.volume, 0)
+    const lastVolume = activeChartData[activeChartData.length - 1]?.volume ?? 0
+    return {
+      open: activeChartData[0].open,
+      high: Math.max(...highs),
+      low: Math.min(...lows),
+      close: activeChartData[activeChartData.length - 1].close,
+      volume: totalVolume,
+      lastVolume,
+    }
+  }, [activeChartData, livePrice])
+
+  // Calculate current volume and price range from polygon data
+  const volumeStr = formatVolumeValue(viewStats.volume)
 
   useEffect(() => {
     if (symbol) {
@@ -460,6 +569,54 @@ export default function TickerPage() {
       router.push('/')
     }
   }, [symbol, router, polygonCurrentPrice, polygonPriceChange, polygonPriceChangePercent, snapshot])
+
+  // Auto-connect WebSocket on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    polygonWebSocketService.connect().catch(error => {
+      console.error('[TickerPage] Failed to connect WebSocket:', error)
+    })
+  }, [])
+
+  // Subscribe to WebSocket trade stream for rapid live price updates
+  useEffect(() => {
+    if (!symbol) return
+
+    console.log('[TickerPage] Subscribing to trade stream for rapid price updates');
+
+    const unsubscribe = polygonWebSocketService.onTrade(
+      symbol.toUpperCase(),
+      (trade) => {
+        setLivePrice(prev => {
+          if (trade.price > prev) {
+            setPriceFlash('up')
+          } else if (trade.price < prev) {
+            setPriceFlash('down')
+          }
+          setTimeout(() => setPriceFlash(null), 300)
+          return trade.price
+        })
+        setLastTradeTime(Date.now())
+        setTradeCount(prev => prev + 1)
+
+        if (ticker && snapshot?.prevDay?.c) {
+          const prevClose = snapshot.prevDay.c
+          const change = trade.price - prevClose
+          const changePct = (change / prevClose) * 100
+
+          setTicker(prev => prev ? {
+            ...prev,
+            price: trade.price,
+            change,
+            changePercent: changePct,
+          } : null)
+        }
+      }
+    )
+
+    return unsubscribe
+  }, [symbol, ticker, snapshot])
 
   // Update live price from polygon data without causing render loops
   useEffect(() => {
@@ -553,11 +710,29 @@ export default function TickerPage() {
             <div className="flex flex-row items-center justify-between gap-2 flex-wrap ticker-header__row">
               <div className="flex flex-row items-baseline gap-2 sm:gap-4 ticker-header__titleGroup">
                 <h1 className="text-xl sm:text-3xl font-bold ticker-header__title">{ticker.symbol}</h1>
+                {/* Real-time Trade Stream Indicator */}
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-green-500/20 border border-green-500">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                  <span className="text-xs font-bold text-green-400">LIVE</span>
+                  {tradeCount > 0 && (
+                    <span className="text-[10px] text-green-300">{tradeCount} trades</span>
+                  )}
+                </div>
                 <span className="text-xs sm:text-sm text-gray-500 font-medium" title={`Visible: ${visibleBarCount} / Total: ${chartData.length} bars • Timeframe: ${timeframe}, Range: ${displayTimeframe}`}>
                   {visibleBarCount} bars
                 </span>
                 <div className="flex items-baseline gap-2 sm:gap-3">
-                  <span className="text-lg sm:text-2xl font-semibold transition-all duration-200 hover:text-green-300 ticker-header__price">
+                  <span
+                    className={`text-lg sm:text-2xl font-semibold transition-all duration-200 ticker-header__price ${
+                      priceFlash === 'up' ? 'text-green-400 scale-110' :
+                      priceFlash === 'down' ? 'text-red-400 scale-110' :
+                      'hover:text-green-300'
+                    }`}
+                    style={{
+                      transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                      textShadow: priceFlash ? '0 0 10px currentColor' : 'none'
+                    }}
+                  >
                     ${livePrice.toFixed(2)}
                   </span>
                   <span className={`text-sm sm:text-lg font-medium transition-colors ticker-header__change ${ticker.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -587,23 +762,23 @@ export default function TickerPage() {
               <div className="flex flex-wrap gap-4 sm:gap-6 text-xs sm:text-sm border-t border-gray-800 pt-3">
                 <div className="flex flex-col">
                   <span className="text-gray-500">Open</span>
-                  <span className="text-white font-semibold">${(sessionOpen ?? (recentBars.length > 0 ? recentBars[0].open : livePrice)).toFixed(2)}</span>
+                  <span className="text-white font-semibold">${viewStats.open.toFixed(2)}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-gray-500">High</span>
-                  <span className="text-green-400 font-semibold">${todayHigh.toFixed(2)}</span>
+                  <span className="text-green-400 font-semibold">${viewStats.high.toFixed(2)}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-gray-500">Low</span>
-                  <span className="text-red-400 font-semibold">${todayLow.toFixed(2)}</span>
+                  <span className="text-red-400 font-semibold">${viewStats.low.toFixed(2)}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-gray-500">Volume</span>
                   <span className="text-white font-semibold">{volumeStr}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-gray-500">24h Range</span>
-                  <span className="text-gray-300 font-semibold">${todayLow.toFixed(2)} - ${todayHigh.toFixed(2)}</span>
+                  <span className="text-gray-500">Range</span>
+                  <span className="text-gray-300 font-semibold">${viewStats.low.toFixed(2)} - ${viewStats.high.toFixed(2)}</span>
                 </div>
               </div>
             )}
@@ -665,31 +840,50 @@ export default function TickerPage() {
               symbol={ticker.symbol}
               currentPrice={livePrice}
               stopLoss={livePrice * 0.98}
-              targets={[
-                livePrice * 1.005, // +0.5%
-                livePrice * 1.01,  // +1.0%
-                livePrice * 1.02   // +2.0%
-              ]}
+              targets={chartTargets}
               entryPoint={livePrice}
               data={chartData.length > 0 ? chartData : undefined}
               showFvg={showFvg}
+              fvgPercentage={fvgPercentage}
               onFvgCountChange={setFvgCount}
-              onVisibleBarCountChange={(count, data) => {
-                setVisibleBarCount(count)
-                setVisibleChartData(data)
-              }}
+              onVisibleBarCountChange={handleVisibleBarCountChange}
               onLoadMoreData={handleLoadMoreData}
-              onTimeframeChange={(tf, displayTf) => {
-                console.log('[TickerPage] Timeframe changed to:', tf, 'Display:', displayTf);
+              isLoadingMore={isLoadingMoreData}
+              onTimeframeChange={(tf, displayTf, intervalLabelOverride) => {
+                console.log('[TickerPage] Timeframe changed to:', tf, 'Display:', displayTf, 'Interval:', intervalLabelOverride);
                 setTimeframe(tf as any);
                 setDisplayTimeframe(displayTf);
+
+                if (displayTf !== 'Custom') {
+                  setDataDisplayTimeframe(displayTf);
+                } else if (intervalLabelOverride) {
+                  const overrideDisplay = intervalLabelToDisplayTimeframe(intervalLabelOverride);
+                  if (overrideDisplay) {
+                    setDataDisplayTimeframe(overrideDisplay);
+                  }
+                }
+
                 setAdditionalBarsToLoad(0); // Reset to base limit when changing timeframe
               }}
             />
           </div>
-          {!polygonError && !isPolygonLoading && polygonData.length > 0 && (
+          {!polygonError && !isPolygonLoading && finalPolygonData.length > 0 && (
             <div className="mt-2 text-center">
-              <span className="text-xs text-green-400">✓ Live price via Polygon snapshot (≈5s), chart via aggregates (60s)</span>
+              <div className="flex items-center justify-center gap-3">
+                <span className="text-xs text-green-400 font-semibold animate-pulse">⚡ REAL-TIME TRADE STREAM</span>
+                {wsConnected ? (
+                  <span className="text-xs text-green-400">✓ WebSocket Connected</span>
+                ) : (
+                  <span className="text-xs text-yellow-400">⟳ Connecting WebSocket...</span>
+                )}
+                {tradeCount > 0 && (
+                  <span className="text-xs text-blue-400">{tradeCount} trades received</span>
+                )}
+                {lastTradeTime > 0 && (
+                  <span className="text-xs text-gray-400">Last update: {Math.round((Date.now() - lastTradeTime) / 1000)}s ago</span>
+                )}
+                {wsError && <span className="text-xs text-red-400">✗ Error: {wsError.message}</span>}
+              </div>
             </div>
           )}
         </div>
@@ -853,9 +1047,9 @@ export default function TickerPage() {
                 {polygonData.length > 20 && <div className="text-xs text-green-400 mt-1">✓ Calculated from live data</div>}
               </div>
               <div className="bg-gray-800/50 rounded-lg p-3">
-                <div className="text-gray-400 text-xs font-medium mb-1">Current Volume</div>
-                <div className="text-sm sm:text-base font-semibold">{volumeStr}</div>
-                {polygonData.length > 0 && <div className="text-xs text-green-400 mt-1">✓ Live data</div>}
+                <div className="text-gray-400 text-xs font-medium mb-1">Current Candle Vol</div>
+                <div className="text-sm sm:text-base font-semibold">{formatVolumeValue(viewStats.lastVolume)}</div>
+                {activeChartData.length > 0 && <div className="text-xs text-green-400 mt-1">✓ Live data</div>}
               </div>
               <div className="bg-gray-800/50 rounded-lg p-3">
                 <div className="text-gray-400 text-xs font-medium mb-1">RSI (14)</div>

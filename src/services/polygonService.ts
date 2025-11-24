@@ -17,7 +17,7 @@ class PolygonService {
   private isProcessingQueue: boolean = false;
   private minRequestInterval: number = 13000; // default 13 seconds between requests (free tier)
   private lastRequestTime: number = 0;
-  private plan: 'free' | 'starter' | 'developer' = 'free';
+  private plan: 'free' | 'starter' | 'developer' | 'advanced' = 'free';
 
   constructor() {
     const apiKey = process.env.NEXT_PUBLIC_POLYGON_API_KEY || '';
@@ -25,9 +25,9 @@ class PolygonService {
     this.client = restClient(apiKey);
 
     // Detect plan from env and tune limits accordingly
-    // NEXT_PUBLIC_POLYGON_PLAN can be 'free' | 'starter' | 'developer'
+    // NEXT_PUBLIC_POLYGON_PLAN can be 'free' | 'starter' | 'developer' | 'advanced'
     const planEnv = (process.env.NEXT_PUBLIC_POLYGON_PLAN || '').toLowerCase();
-    if (planEnv === 'starter' || planEnv === 'developer') {
+    if (planEnv === 'starter' || planEnv === 'developer' || planEnv === 'advanced') {
       this.plan = planEnv as any;
     }
 
@@ -196,13 +196,20 @@ class PolygonService {
         // For intraday timeframes, we need to account for weekends and market hours
         // For daily+ timeframes, we can use simpler calculation
         const now = Date.now();
-        const toDate = new Date(now);
+        const toDate = this.getLastTradingDate(new Date(now));
 
         // Use special date calculation for specific display timeframes
         const fromDate = this.calculateDateRange(toDate, timeframe, limit, displayTimeframe);
 
-        console.log(`[PolygonService] Current timestamp: ${now}, toDate: ${toDate.toISOString()}`);
-        console.log(`[PolygonService] Requesting ${limit} bars of ${timeframe} data for ${ticker} from ${this.formatDate(fromDate)} to ${this.formatDate(toDate)}`);
+        // For intraday timeframes (1m, 5m, 15m, 30m, 1h, 2h, 4h), use current date/time to get all data up to now
+        // For daily+ timeframes, use today's date
+        // Previously we added +1 day but this caused issues getting latest candles after market close
+        const adjustedToDate = toDate;
+        const toDateStr = this.formatDate(adjustedToDate);
+        const fromDateStr = this.formatDate(fromDate);
+
+        // Simplified logging
+        console.log(`[🔍 FETCH] ${ticker} ${timeframe} (${displayTimeframe}): ${fromDateStr} to ${toDateStr}, limit=${limit}`);
 
         const response = await this.makeRequestWithRetry(async () => {
           // Using the Polygon.io REST client
@@ -210,8 +217,8 @@ class PolygonService {
             ticker,
             config.multiplier,
             config.timespan as any, // Polygon client uses enum, we use string
-            this.formatDate(fromDate),
-            this.formatDate(toDate),
+            fromDateStr,
+            toDateStr,
             true, // adjusted
             'asc' as any, // sort
             50000 // limit
@@ -219,24 +226,18 @@ class PolygonService {
           return result;
         });
 
-        console.log(`[PolygonService] API Response:`, {
-          status: response.status,
-          resultsCount: response.resultsCount,
-          queryCount: response.queryCount,
-          hasResults: !!response.results,
-          resultsLength: response.results?.length || 0,
-        });
-
         // Trust presence of results over status (Polygon may return status 'DELAYED')
         if (response && Array.isArray(response.results) && response.results.length > 0) {
           const normalized = this.normalizeAggregates(response.results);
-          console.log(`[PolygonService] Received ${normalized.length} bars, returning last ${Math.min(limit, normalized.length)}`);
-          // Return up to the requested limit (most recent bars)
-          return normalized.slice(-limit);
+          const firstBar = normalized[0];
+          const lastBar = normalized[normalized.length - 1];
+          const firstDate = new Date(firstBar.time).toLocaleDateString();
+          const lastDate = new Date(lastBar.time).toLocaleDateString();
+          console.log(`[✅ DATA] Got ${normalized.length} bars: ${firstDate} → ${lastDate}`);
+          return normalized;
         }
 
         // If no results, throw error with helpful message
-        console.error(`[PolygonService] No results from API. Full response:`, response);
         throw new Error(`No market data available for ${ticker}. The ticker symbol may be invalid or data may not be available for this timeframe.`);
       } catch (error: any) {
         console.error('Error fetching aggregates from Polygon.io:', error);
@@ -355,44 +356,112 @@ class PolygonService {
   }
 
   /**
-   * Calculate date range for specific display timeframes (YTD, 1Y, 5Y, All)
+   * Calculate date range based on display timeframe AND interval
+   * The key insight: we need enough calendar time to get enough bars at the given interval
    * @param toDate End date (usually now)
-   * @param timeframe Data timeframe (1d, 1w, etc.)
-   * @param limit Number of bars
-   * @param displayTimeframe Display timeframe (YTD, 1Y, 5Y, All, etc.)
+   * @param timeframe Data interval (1m, 5m, 1h, 1d, etc.) - the granularity of bars
+   * @param limit Number of bars to fetch
+   * @param displayTimeframe Display period (1D, 5D, 1M, etc.) - what the user wants to view
    * @returns From date
    */
   private calculateDateRange(toDate: Date, timeframe: Timeframe, limit: number, displayTimeframe?: string): Date {
     const date = new Date(toDate.getTime());
 
-    // Handle special display timeframes
+    // Calculate trading hours per day (6.5 hours: 9:30am - 4:00pm ET)
+    const tradingHoursPerDay = 6.5;
+
+    // Helper: calculate calendar days needed for a given number of bars at this interval
+    const getDaysForBars = (bars: number, interval: Timeframe): number => {
+      switch (interval) {
+        case '1m':
+          return Math.ceil(bars / (tradingHoursPerDay * 60) * 1.5); // 1.5x for weekends
+        case '5m':
+          return Math.ceil(bars / (tradingHoursPerDay * 12) * 1.5);
+        case '15m':
+          return Math.ceil(bars / (tradingHoursPerDay * 4) * 1.5);
+        case '30m':
+          return Math.ceil(bars / (tradingHoursPerDay * 2) * 1.5);
+        case '1h':
+          return Math.ceil(bars / tradingHoursPerDay * 1.5);
+        case '2h':
+          return Math.ceil(bars / (tradingHoursPerDay / 2) * 1.5);
+        case '4h':
+          return Math.ceil(bars / (tradingHoursPerDay / 4) * 1.5);
+        case '1d':
+          return Math.ceil(bars * 1.5); // 1.5x for weekends
+        case '1w':
+          return Math.ceil(bars * 7);
+        case '1M':
+          return Math.ceil(bars * 30);
+        default:
+          return Math.ceil(bars * 1.5);
+      }
+    };
+
+    // For display timeframes, calculate appropriate lookback with buffer for panning
     if (displayTimeframe) {
+      let daysToGoBack = 0;
+
       switch (displayTimeframe) {
+        case '1D':
+          // 1 day view: load enough days to get all the bars we need
+          daysToGoBack = getDaysForBars(limit, timeframe);
+          break;
+
+        case '5D':
+          // 5 day view: explicitly request the last calendar week to cover 5 trading days
+          daysToGoBack = Math.max(7, getDaysForBars(limit, timeframe));
+          break;
+
+        case '1M':
+          // 1 month view: load enough days to get all the bars we need
+          daysToGoBack = Math.max(90, getDaysForBars(limit, timeframe));
+          break;
+
+        case '3M':
+          // 3 month view: only go back ~4 months plus buffer so we stay near current date
+          daysToGoBack = Math.max(120, getDaysForBars(limit, timeframe));
+          break;
+
+        case '6M':
+          // 6 month view: load enough days to get all the bars we need
+          daysToGoBack = Math.max(540, getDaysForBars(limit, timeframe));
+          break;
+
         case 'YTD':
-          // Year to date - January 1st of current year
-          date.setMonth(0); // January
+          // Year to date - go to January 1st of current year
+          date.setMonth(0);
           date.setDate(1);
           date.setHours(0, 0, 0, 0);
-          console.log(`[PolygonService] YTD: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          console.log(`[PolygonService] YTD (${timeframe}): From ${date.toISOString()} to ${toDate.toISOString()}`);
           return date;
 
         case '1Y':
-          // Exactly 1 year back
+          // 1 year view: go back exactly 1 year
           date.setFullYear(date.getFullYear() - 1);
-          console.log(`[PolygonService] 1Y: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          console.log(`[PolygonService] 1Y (${timeframe}): From ${date.toISOString()} to ${toDate.toISOString()}`);
           return date;
 
         case '5Y':
-          // Exactly 5 years back
+          // 5 year view: go back exactly 5 years
           date.setFullYear(date.getFullYear() - 5);
-          console.log(`[PolygonService] 5Y: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          console.log(`[PolygonService] 5Y (${timeframe}): From ${date.toISOString()} to ${toDate.toISOString()}`);
           return date;
 
         case 'All':
-          // Go back 20 years (or as far as data exists)
+          // All time: go back 20 years (or as far as data exists)
           date.setFullYear(date.getFullYear() - 20);
-          console.log(`[PolygonService] All: From ${date.toISOString()} to ${toDate.toISOString()}`);
+          console.log(`[PolygonService] All (${timeframe}): From ${date.toISOString()} to ${toDate.toISOString()}`);
           return date;
+
+        default:
+          daysToGoBack = getDaysForBars(limit, timeframe);
+      }
+
+      if (daysToGoBack > 0) {
+        date.setDate(date.getDate() - daysToGoBack);
+        console.log(`[PolygonService] ${displayTimeframe} (${timeframe}, ${limit} bars): Going back ${daysToGoBack} days from ${toDate.toISOString()} to ${date.toISOString()}`);
+        return date;
       }
     }
 
@@ -476,6 +545,24 @@ class PolygonService {
   }
   isPaid(): boolean {
     return this.plan !== 'free';
+  }
+
+  /**
+   * Roll any provided date back to the most recent weekday (Mon-Fri)
+   * so that aggregate queries always anchor on an actual trading session.
+   */
+  private getLastTradingDate(date: Date): Date {
+    const adjusted = new Date(date.getTime());
+    let safety = 7; // prevent infinite loops in extreme scenarios
+    while (safety > 0) {
+      const day = adjusted.getDay();
+      if (day !== 0 && day !== 6) {
+        return adjusted;
+      }
+      adjusted.setDate(adjusted.getDate() - 1);
+      safety -= 1;
+    }
+    return adjusted;
   }
 }
 

@@ -82,14 +82,27 @@ export function drawTimeGrid(
 }
 
 function formatTimeLabel(ts: Date, dataTimeframe: string, displayTimeframe?: string): string {
+  const dateLabel = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
+  const weekdayDateLabel = ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'America/New_York' })
+  const timeLabel = ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
+
   if (dataTimeframe === '1M') {
     return ts.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'America/New_York' })
-  } else if (dataTimeframe === '1w' || dataTimeframe === '1d') {
-    return ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
-  } else if (displayTimeframe === '5D' && dataTimeframe === '1h') {
-    // For 5D timeframe with 1h bars, show date number
-    return ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/New_York' })
-  } else {
-    return ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/New_York' })
   }
+
+  if (dataTimeframe === '1w' || dataTimeframe === '1d') {
+    return dateLabel
+  }
+
+  if (displayTimeframe === '5D') {
+    return dataTimeframe === '30m' || dataTimeframe === '1h'
+      ? dateLabel
+      : `${ts.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'America/New_York' })} ${timeLabel}`
+  }
+
+  if (displayTimeframe === '3M') {
+    return weekdayDateLabel
+  }
+
+  return timeLabel
 }

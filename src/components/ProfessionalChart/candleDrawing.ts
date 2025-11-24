@@ -8,11 +8,12 @@ export function drawCandles(
   chartHeight: number,
   minPrice: number,
   maxPrice: number,
-  priceRange: number
+  priceRange: number,
+  baseWidth: number
 ) {
   if (visibleData.length === 0) return
 
-  // Calculate candle width based on actual visible data length
+  // Calculate candle width to fill the entire chart
   const candleWidth = chartWidth / visibleData.length
   const candleSpacing = candleWidth * 0.8
 
@@ -47,21 +48,24 @@ export function drawCandles(
 export function drawVolumeBars(
   volCtx: CanvasRenderingContext2D,
   visibleData: CandleData[],
-  candleWidth: number,
   volChartHeight: number,
   maxVolume: number,
   padding: any,
-  chartWidth?: number
+  chartWidth: number,
+  baseWidth: number
 ) {
   if (visibleData.length === 0) return
 
   const volBarMaxHeight = volChartHeight - 25
 
+  // Calculate candle width to fill the entire chart
+  const candleWidth = chartWidth / visibleData.length
+
   visibleData.forEach((candle, i) => {
     const x = padding.left + i * candleWidth + candleWidth / 2
 
     // Ensure volume bar stays within chart boundaries
-    if (chartWidth && (x < padding.left || x > padding.left + chartWidth)) return
+    if (x < padding.left || x > padding.left + chartWidth) return
 
     const isGreen = candle.close >= candle.open
 

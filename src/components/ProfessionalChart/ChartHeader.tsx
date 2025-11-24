@@ -20,6 +20,8 @@ export function ChartHeader({
   symbol, timeframe, interval, showIntervalDropdown, isFullscreen,
   onTimeframeClick, onIntervalClick, onIntervalChange, onFullscreenToggle,
 }: ChartHeaderProps) {
+  const isCustomMode = timeframe === 'Custom'
+
   return (
     <div className="flex items-center justify-between px-4 py-2 border-b border-gray-800">
       <div className="flex items-center gap-4">
@@ -34,7 +36,7 @@ export function ChartHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="flex gap-1">
+        <div className="flex gap-1 items-center">
           {DISPLAY_TIMEFRAMES.map((tf) => (
             <button
               key={tf}
@@ -46,20 +48,20 @@ export function ChartHeader({
               {tf}
             </button>
           ))}
-        </div>
-
-        <div className="w-px h-4 bg-gray-700 mx-1" />
-
-        <div className="relative interval-dropdown-container">
           <button
             onClick={onIntervalClick}
-            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
+            className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
+              isCustomMode ? 'bg-blue-500 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
           >
-            Interval: {interval}
+            {isCustomMode ? `Interval: ${interval}` : 'Custom Interval'}
             <ChevronDown size={12} />
           </button>
-          {showIntervalDropdown && (
-            <div className="absolute right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 min-w-[120px]">
+        </div>
+
+        <div className="relative interval-dropdown-container">
+          {isCustomMode && showIntervalDropdown && (
+            <div className="absolute left-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg z-50 min-w-[120px]">
               {INTERVAL_LABELS.map((int) => (
                 <button
                   key={int}

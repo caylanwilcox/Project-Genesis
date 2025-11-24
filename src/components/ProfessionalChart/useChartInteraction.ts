@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CandleData } from './types'
+import { Timeframe } from '@/types/polygon'
+import { getDefaultBarsForView } from './hooks'
 
 export function useChartInteraction(
   data: CandleData[],
@@ -9,6 +11,8 @@ export function useChartInteraction(
   setTimeScale: (scale: number | ((prev: number) => number)) => void,
   priceOffset: number,
   setPriceOffset: (offset: number) => void,
+  displayTimeframe?: string,
+  dataTimeframe?: Timeframe,
   onReachLeftEdge?: () => void
 ) {
   const [isPanning, setIsPanning] = useState(false)
@@ -16,8 +20,63 @@ export function useChartInteraction(
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
   const [pinchStart, setPinchStart] = useState<{ distance: number; scale: number } | null>(null)
   const [lastLoadTrigger, setLastLoadTrigger] = useState(0)
+  const panOffsetRef = useRef(panOffset)
+  const timeScaleRef = useRef(timeScale)
+
+  useEffect(() => {
+    panOffsetRef.current = panOffset
+  }, [panOffset])
+
+  useEffect(() => {
+    timeScaleRef.current = timeScale
+  }, [timeScale])
+
+  const clampRatio = useCallback((value: number) => Math.min(1, Math.max(0, value)), [])
+  const clampScale = useCallback((value: number) => Math.max(0.2, Math.min(5, value)), [])
+
+  const calcEffectiveCandles = useCallback((scale: number) => {
+    if (data.length === 0) return 0
+    const base = getDefaultBarsForView(displayTimeframe, dataTimeframe, data.length)
+    const zoomed = Math.round(base / Math.max(scale, 0.01))
+    return Math.max(1, Math.min(data.length, Math.max(20, zoomed)))
+  }, [data.length, displayTimeframe, dataTimeframe])
+
+  const adjustPanForZoom = useCallback((prevScale: number, newScale: number, pointerRatio: number) => {
+    if (data.length === 0 || prevScale === newScale) return
+    const ratio = Number.isFinite(pointerRatio) ? clampRatio(pointerRatio) : 0.5
+    const effOld = calcEffectiveCandles(prevScale)
+    const effNew = calcEffectiveCandles(newScale)
+    if (effOld === 0 || effNew === 0) return
+
+    const endOld = Math.max(0, Math.min(data.length, data.length - panOffsetRef.current))
+    const startOld = Math.max(0, endOld - effOld)
+    const pointerIndex = startOld + ratio * effOld
+
+    let startNew = pointerIndex - ratio * effNew
+    let endNew = startNew + effNew
+
+    if (startNew < 0) {
+      startNew = 0
+      endNew = effNew
+    }
+    if (endNew > data.length) {
+      endNew = data.length
+      startNew = Math.max(0, endNew - effNew)
+    }
+
+    const scrollBack = Math.max(0, data.length - endNew)
+    setPanOffset(scrollBack)
+  }, [calcEffectiveCandles, clampRatio, data.length, setPanOffset])
+
+  const applyZoomToScale = useCallback((targetScale: number, pointerRatio: number) => {
+    const prevScale = timeScaleRef.current
+    const nextScale = clampScale(targetScale)
+    adjustPanForZoom(prevScale, nextScale, pointerRatio)
+    setTimeScale(nextScale)
+  }, [adjustPanForZoom, clampScale, setTimeScale])
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    console.log('[ChartInteraction] Mouse down - starting pan', { panOffset, priceOffset })
     setIsPanning(true)
     setPanStart({ x: e.clientX, y: e.clientY, offsetX: panOffset, offsetY: priceOffset })
   }, [panOffset, priceOffset])
@@ -26,21 +85,25 @@ export function useChartInteraction(
     if (isPanning && panStart) {
       // Horizontal panning (time axis)
       const deltaX = e.clientX - panStart.x
-      const baseCandlesInView = 100
-      const actualCandlesInView = baseCandlesInView / timeScale
-      const candlesPerPixel = actualCandlesInView / rect.width
-      const candleDelta = deltaX * candlesPerPixel // Direct 1:1 pixel mapping
+      // Base panning sensitivity on visible candles, not total data length
+      // This gives consistent drag-to-scroll behavior regardless of how much data is loaded
+      const visibleCandles = Math.min(120, data.length) // Match the visible window size from hooks.ts
+      const candlesPerPixel = visibleCandles / rect.width
+      const candleDelta = deltaX * candlesPerPixel // Positive: drag left = scroll back in time
       const newOffsetX = panStart.offsetX + candleDelta
 
-      const maxOffset = Math.max(0, data.length - actualCandlesInView)
+      const maxOffset = Math.max(0, data.length)
       const minOffset = 0
       const clampedOffset = Math.max(minOffset, Math.min(maxOffset, newOffsetX))
+
+      console.log(`[ChartInteraction] deltaX=${deltaX.toFixed(1)}, candleDelta=${candleDelta.toFixed(1)}, newOffset=${newOffsetX.toFixed(1)}, clamped=${clampedOffset.toFixed(1)}, data.length=${data.length}`)
       setPanOffset(clampedOffset)
 
-      // If user is trying to pan left beyond beginning (negative offset attempt)
-      // and we're already at the left edge, trigger callback to load more data
+      // If user is panning left (increasing panOffset) and has reached near the left edge of data
+      // trigger callback to load more historical data
       // Debounce to prevent multiple rapid triggers (2 second cooldown)
-      if (newOffsetX < -10 && clampedOffset === 0 && onReachLeftEdge) {
+      const leftEdgeThreshold = data.length - 20 // Within 20 bars of the oldest data
+      if (newOffsetX > leftEdgeThreshold && onReachLeftEdge) {
         const now = Date.now()
         if (now - lastLoadTrigger > 2000) {
           console.log('[ChartInteraction] Reached left edge, triggering onReachLeftEdge callback')
@@ -87,7 +150,7 @@ export function useChartInteraction(
         touch2.clientX - touch1.clientX,
         touch2.clientY - touch1.clientY
       )
-      setPinchStart({ distance, scale: timeScale })
+      setPinchStart({ distance, scale: timeScaleRef.current })
       return
     }
 
@@ -96,7 +159,7 @@ export function useChartInteraction(
     const t = e.touches[0]
     setIsPanning(true)
     setPanStart({ x: t.clientX, y: t.clientY, offsetX: panOffset, offsetY: priceOffset })
-  }, [panOffset, priceOffset, timeScale])
+  }, [panOffset, priceOffset])
 
   const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>, rect: DOMRect) => {
     if (e.touches.length === 0) return
@@ -112,12 +175,14 @@ export function useChartInteraction(
         touch2.clientY - touch1.clientY
       )
 
+      const ratio = clampRatio((((touch1.clientX + touch2.clientX) / 2) - rect.left) / rect.width)
+
       if (!pinchStart) {
-        setPinchStart({ distance, scale: timeScale })
+        setPinchStart({ distance, scale: timeScaleRef.current })
       } else {
         const scaleFactor = distance / pinchStart.distance
         const newScale = pinchStart.scale * scaleFactor
-        setTimeScale(Math.max(0.2, Math.min(5, newScale)))
+        applyZoomToScale(newScale, ratio)
       }
       return
     }
@@ -127,20 +192,22 @@ export function useChartInteraction(
     if (isPanning && panStart) {
       // Horizontal panning
       const deltaX = t.clientX - panStart.x
-      const baseCandlesInView = 100
-      const actualCandlesInView = baseCandlesInView / timeScale
-      const candlesPerPixel = actualCandlesInView / rect.width
-      const candleDelta = deltaX * candlesPerPixel // Direct 1:1 pixel mapping
+      // Base panning sensitivity on visible candles, not total data length
+      const visibleCandles = Math.min(120, data.length) // Match the visible window size from hooks.ts
+      const candlesPerPixel = visibleCandles / rect.width
+      const candleDelta = deltaX * candlesPerPixel // Positive: drag left = scroll back in time
       const newOffsetX = panStart.offsetX + candleDelta
 
-      const maxOffset = Math.max(0, data.length - actualCandlesInView)
+      const maxOffset = Math.max(0, data.length)
       const minOffset = 0
       const clampedOffset = Math.max(minOffset, Math.min(maxOffset, newOffsetX))
       setPanOffset(clampedOffset)
 
-      // If user is trying to pan left beyond beginning, trigger callback to load more data
+      // If user is panning left (increasing panOffset) and has reached near the left edge of data
+      // trigger callback to load more historical data
       // Debounce to prevent multiple rapid triggers (2 second cooldown)
-      if (newOffsetX < -10 && clampedOffset === 0 && onReachLeftEdge) {
+      const leftEdgeThreshold = data.length - 20 // Within 20 bars of the oldest data
+      if (newOffsetX > leftEdgeThreshold && onReachLeftEdge) {
         const now = Date.now()
         if (now - lastLoadTrigger > 2000) {
           console.log('[ChartInteraction] Reached left edge (touch), triggering onReachLeftEdge callback')
@@ -166,6 +233,16 @@ export function useChartInteraction(
     setPinchStart(null)
   }, [])
 
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>, rect: DOMRect) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!rect) return
+    const direction = e.deltaY < 0 ? 1 : -1
+    const zoomStep = (e.ctrlKey ? 0.05 : 0.1) * direction
+    const ratio = clampRatio((e.clientX - rect.left) / rect.width)
+    applyZoomToScale(timeScaleRef.current + zoomStep, ratio)
+  }, [applyZoomToScale, clampRatio])
+
   return {
     isPanning,
     mousePos,
@@ -176,5 +253,6 @@ export function useChartInteraction(
     handleTouchStart,
     handleTouchMove,
     handleTouchEnd,
+    handleWheel,
   }
 }

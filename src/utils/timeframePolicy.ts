@@ -6,17 +6,17 @@ export const DISPLAY_TIMEFRAMES: string[] = [
 ]
 
 // Map UI display timeframe to API timeframe and human label
+// Goal: Show appropriate granularity for each time period
 const displayToDataTimeframeMap: Record<string, { timeframe: Timeframe; intervalLabel: string }> = {
-  // Use finer intraday granularity for better fidelity while staying performant
-  '1D':  { timeframe: '15m', intervalLabel: '15 min' },
-  '5D':  { timeframe: '1h',  intervalLabel: '1 hour' },
-  '1M':  { timeframe: '4h',  intervalLabel: '4 hour' },
-  '3M':  { timeframe: '1d',  intervalLabel: '1 day' },
-  '6M':  { timeframe: '1d',  intervalLabel: '1 day' },
-  'YTD': { timeframe: '1d',  intervalLabel: '1 day' },
-  '1Y':  { timeframe: '1d',  intervalLabel: '1 day' },
-  '5Y':  { timeframe: '1w',  intervalLabel: '1 week' },
-  'All': { timeframe: '1M',  intervalLabel: '1 month' },
+  '1D':  { timeframe: '1m',  intervalLabel: '1 min' },   // 1 day: 1-min bars (390 bars per trading day)
+  '5D':  { timeframe: '5m',  intervalLabel: '5 min' },   // 5 days: 5-min bars (390 bars total)
+  '1M':  { timeframe: '1h',  intervalLabel: '1 hour' },   // 1 month: hourly bars (~140 bars)
+  '3M':  { timeframe: '1h',  intervalLabel: '1 hour' },   // 3 months: hourly bars (~410 bars)
+  '6M':  { timeframe: '4h',  intervalLabel: '4 hour' },   // 6 months: 4-hour bars (~315 bars)
+  'YTD': { timeframe: '1d',  intervalLabel: '1 day' },   // Year to date: daily bars
+  '1Y':  { timeframe: '1d',  intervalLabel: '1 day' },   // 1 year: daily bars (252 trading days)
+  '5Y':  { timeframe: '1w',  intervalLabel: '1 week' },  // 5 years: weekly bars (260 bars)
+  'All': { timeframe: '1M',  intervalLabel: '1 month' }, // All time: monthly bars
 }
 
 // Convert dropdown interval label to API timeframe
@@ -41,6 +41,23 @@ export function intervalLabelToTimeframe(label: string): Timeframe | undefined {
   return intervalLabelToTimeframeMap[label]
 }
 
+const intervalLabelToDisplayMap: Record<string, string> = {
+  '1 min': '1D',
+  '5 min': '1D',
+  '15 min': '5D',
+  '30 min': '1M',
+  '1 hour': '1M',
+  '2 hour': '3M',
+  '4 hour': '3M',
+  '1 day': '6M',
+  '1 week': '1Y',
+  '1 month': '5Y',
+}
+
+export function intervalLabelToDisplayTimeframe(label: string): string | undefined {
+  return intervalLabelToDisplayMap[label]
+}
+
 // Recommended polling cadence based on API timeframe (ms)
 export function recommendedRefreshMs(timeframe: Timeframe): number {
   switch (timeframe) {
@@ -63,38 +80,116 @@ export function recommendedRefreshMs(timeframe: Timeframe): number {
   }
 }
 
-// Recommended bar limits based on timeframe and selected display range
-// Load at least 3x the displayed interval to eliminate blank space
+// Recommended bar limits based on interval and display timeframe
+// Strategy: Load 3-10x the visible bars for smooth panning
 export function recommendedBarLimit(timeframe: Timeframe, displayTimeframe: string): number {
-  // Minute resolutions - load 3x for buffer
-  if (timeframe === '1m') return 1170 // 3 trading days (390 * 3)
-  if (timeframe === '5m') return 1170 // ~15 days coverage (390 * 3)
-  if (timeframe === '15m') return 600 // ~6-9 weeks (200 * 3)
-  if (timeframe === '30m') return 600 // (200 * 3)
+  // Calculate base visible bars for this combination
+  const getVisibleBars = (interval: Timeframe, display: string): number => {
+    const tradingHoursPerDay = 6.5;
 
-  // Hour resolutions - load 3x for buffer
-  if (timeframe === '1h') {
-    if (displayTimeframe === '1D') return 30 // 3 days minimum (10 * 3)
-    if (displayTimeframe === '5D') return 450 // ~3 months (150 * 3)
-    if (displayTimeframe === '1M') return 450 // ~3 months (150 * 3)
-    return 600 // (200 * 3)
-  }
-  if (timeframe === '2h') return 600 // (200 * 3)
-  if (timeframe === '4h') return 600 // (200 * 3)
+    // 1D display timeframe
+    if (display === '1D') {
+      if (interval === '1m') return 390;   // 6.5 hours × 60
+      if (interval === '5m') return 78;    // 6.5 hours × 12
+      if (interval === '15m') return 26;   // 6.5 hours × 4
+      if (interval === '30m') return 13;   // 6.5 hours × 2
+      if (interval === '1h') return 7;     // 6.5 hours
+      if (interval === '2h') return 3;     // 6.5 / 2
+      if (interval === '4h') return 2;     // 6.5 / 4
+      if (interval === '1d') return 1;
+      return 78;
+    }
 
-  // Daily and above - load 3x for buffer
-  if (timeframe === '1d') {
-    if (displayTimeframe === '1M') return 90 // ~3 months (30 * 3)
-    if (displayTimeframe === '3M') return 300 // ~9 months (100 * 3)
-    if (displayTimeframe === '6M') return 540 // ~18 months (180 * 3)
-    if (displayTimeframe === 'YTD') return 900 // ~3 years (300 * 3)
-    if (displayTimeframe === '1Y') return 1095 // ~3 years (365 * 3)
-    return 600 // (200 * 3)
-  }
-  if (timeframe === '1w') return 780 // ~15 years (260 * 3)
-  if (timeframe === '1M') return 360 // ~30 years (120 * 3)
+    // 5D display timeframe
+    if (display === '5D') {
+      if (interval === '1m') return 1950;  // 5 days × 390
+      if (interval === '5m') return 390;   // 5 days × 78
+      if (interval === '15m') return 130;  // 5 days × 26
+      if (interval === '30m') return 65;   // 5 days × 13
+      if (interval === '1h') return 33;    // 5 days × 6.5
+      if (interval === '2h') return 16;    // 5 days × 3.25
+      if (interval === '4h') return 8;     // 5 days × 1.625
+      if (interval === '1d') return 5;
+      return 65;
+    }
 
-  return 600 // default 3x buffer (200 * 3)
+    // 1M display timeframe (~21 trading days)
+    if (display === '1M') {
+      if (interval === '1m') return 8190;  // 21 × 390
+      if (interval === '5m') return 1638;  // 21 × 78
+      if (interval === '15m') return 546;  // 21 × 26
+      if (interval === '30m') return 273;  // 21 × 13
+      if (interval === '1h') return 140;   // 21 × 6.5 (rounded)
+      if (interval === '2h') return 68;    // 21 × 3.25
+      if (interval === '4h') return 34;    // 21 × 1.625
+      if (interval === '1d') return 21;
+      return 140;
+    }
+
+    // 3M display timeframe (~63 trading days)
+    if (display === '3M') {
+      if (interval === '1m') return 24570; // 63 × 390
+      if (interval === '5m') return 4914;  // 63 × 78
+      if (interval === '15m') return 1638; // 63 × 26
+      if (interval === '30m') return 819;  // 63 × 13
+      if (interval === '1h') return 410;   // 63 × 6.5
+      if (interval === '2h') return 205;   // 63 × 3.25
+      if (interval === '4h') return 100;   // 63 × 1.625 (rounded)
+      if (interval === '1d') return 63;
+      if (interval === '1w') return 13;
+      return 100;
+    }
+
+    // 6M display timeframe (~126 trading days)
+    if (display === '6M') {
+      if (interval === '2h') return 410;   // 126 × 3.25
+      if (interval === '4h') return 205;   // 126 × 1.625
+      if (interval === '1d') return 126;
+      if (interval === '1w') return 26;
+      return 126;
+    }
+
+    // 1Y display timeframe (252 trading days)
+    if (display === '1Y') {
+      if (interval === '4h') return 410;   // 252 × 1.625
+      if (interval === '1d') return 252;
+      if (interval === '1w') return 52;
+      return 252;
+    }
+
+    // 5Y display timeframe
+    if (display === '5Y') {
+      if (interval === '1d') return 1260;  // 1260 trading days
+      if (interval === '1w') return 260;   // 260 weeks
+      if (interval === '1M') return 60;    // 60 months
+      return 260;
+    }
+
+    // YTD - varies, use generous estimate
+    if (display === 'YTD') {
+      if (interval === '4h') return 350;
+      if (interval === '1d') return 200;
+      if (interval === '1w') return 40;
+      return 200;
+    }
+
+    // All - maximum data
+    if (display === 'All') {
+      if (interval === '1w') return 520;   // 10 years
+      if (interval === '1M') return 240;   // 20 years
+      if (interval === '1d') return 2520;  // 10 years
+      return 520;
+    }
+
+    return 100; // fallback
+  };
+
+  const visibleBars = getVisibleBars(timeframe, displayTimeframe);
+
+  // Apply 3x buffer for smooth panning (except for very long timeframes)
+  const bufferMultiplier = displayTimeframe === 'All' || displayTimeframe === '5Y' ? 1.5 : 3;
+
+  return Math.ceil(visibleBars * bufferMultiplier);
 }
 
 export const INTERVAL_LABELS: string[] = [

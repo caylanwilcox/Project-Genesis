@@ -22,6 +22,8 @@ export interface FvgPattern {
   fib382?: number  // Fibonacci 38.2% level within gap
   fib50?: number   // Fibonacci 50% level within gap
   fib618?: number  // Fibonacci 61.8% level within gap
+  expanded?: boolean  // Whether the FVG is expanded to show full details
+  id?: string  // Unique identifier for click tracking
 }
 
 /**
@@ -54,11 +56,11 @@ export function detectFvgPatterns(data: CandleData[], options?: {
       const gapSize = candle3.low - candle1.high
       const gapSizePct = (gapSize / candle2.close) * 100
 
-      // Debug logging for recent candles
-      if (isRecent) {
-        console.log(`[FVG Debug] Bullish FVG at index ${i}: ${gapSizePct.toFixed(3)}% (${gapSize.toFixed(2)})`,
-          { candle1High: candle1.high, candle3Low: candle3.low, passed: gapSizePct >= minGapPct && gapSizePct <= maxGapPct })
-      }
+      // Debug logging for recent candles (disabled to reduce console noise)
+      // if (isRecent) {
+      //   console.log(`[FVG Debug] Bullish FVG at index ${i}: ${gapSizePct.toFixed(3)}% (${gapSize.toFixed(2)})`,
+      //     { candle1High: candle1.high, candle3Low: candle3.low, passed: gapSizePct >= minGapPct && gapSizePct <= maxGapPct })
+      // }
 
       // Filter: gap size between configurable thresholds
       if (gapSizePct >= minGapPct && gapSizePct <= maxGapPct) {
@@ -127,7 +129,9 @@ export function detectFvgPatterns(data: CandleData[], options?: {
           marketStructure,
           fib382,
           fib50,
-          fib618
+          fib618,
+          expanded: false,
+          id: `fvg-bullish-${i - 2}`
         })
       }
     }
@@ -138,11 +142,11 @@ export function detectFvgPatterns(data: CandleData[], options?: {
       const gapSize = candle1.low - candle3.high
       const gapSizePct = (gapSize / candle2.close) * 100
 
-      // Debug logging for recent candles
-      if (isRecent) {
-        console.log(`[FVG Debug] Bearish gap at index ${i}: ${gapSizePct.toFixed(3)}% (${gapSize.toFixed(2)})`,
-          { candle1Low: candle1.low, candle3High: candle3.high, passed: gapSizePct >= minGapPct && gapSizePct <= maxGapPct })
-      }
+      // Debug logging for recent candles (disabled to reduce console noise)
+      // if (isRecent) {
+      //   console.log(`[FVG Debug] Bearish gap at index ${i}: ${gapSizePct.toFixed(3)}% (${gapSize.toFixed(2)})`,
+      //     { candle1Low: candle1.low, candle3High: candle3.high, passed: gapSizePct >= minGapPct && gapSizePct <= maxGapPct })
+      // }
 
       // Filter: gap size between configurable thresholds
       if (gapSizePct >= minGapPct && gapSizePct <= maxGapPct) {
@@ -211,7 +215,9 @@ export function detectFvgPatterns(data: CandleData[], options?: {
           marketStructure,
           fib382,
           fib50,
-          fib618
+          fib618,
+          expanded: false,
+          id: `fvg-bearish-${i - 2}`
         })
       }
     }
@@ -225,6 +231,58 @@ export function detectFvgPatterns(data: CandleData[], options?: {
   }
 
   return patterns
+}
+
+/**
+ * Helper to check if a point is inside a circle
+ */
+export function isPointInFvgDot(
+  x: number,
+  y: number,
+  dotX: number,
+  dotY: number,
+  radius: number
+): boolean {
+  const dx = x - dotX
+  const dy = y - dotY
+  return Math.sqrt(dx * dx + dy * dy) <= radius
+}
+
+/**
+ * Find which FVG pattern was clicked (if any)
+ */
+export function findClickedFvg(
+  patterns: FvgPattern[],
+  clickX: number,
+  clickY: number
+): FvgPattern | null {
+  for (const pattern of patterns) {
+    // If collapsed, check dot click
+    if (!pattern.expanded) {
+      const dotX = (pattern as any).dotX
+      const dotY = (pattern as any).dotY
+      const dotRadius = (pattern as any).dotRadius
+
+      if (dotX !== undefined && dotY !== undefined && dotRadius !== undefined) {
+        if (isPointInFvgDot(clickX, clickY, dotX, dotY, dotRadius)) {
+          return pattern
+        }
+      }
+    } else {
+      // If expanded, check if click is within the box
+      const boxLeft = (pattern as any).boxLeft
+      const boxTop = (pattern as any).boxTop
+      const boxRight = (pattern as any).boxRight
+      const boxBottom = (pattern as any).boxBottom
+
+      if (boxLeft !== undefined && boxTop !== undefined && boxRight !== undefined && boxBottom !== undefined) {
+        if (clickX >= boxLeft && clickX <= boxRight && clickY >= boxTop && clickY <= boxBottom) {
+          return pattern
+        }
+      }
+    }
+  }
+  return null
 }
 
 /**
@@ -243,10 +301,9 @@ export function drawFvgPatterns(
   baseWidth: number,
   visibleStart: number
 ) {
-  // Match candle spacing logic with drawCandles(): use the larger of baseWidth or visibleData length
-  const effectiveWidth = Math.max(baseWidth, visibleData.length)
-  const candleWidth = chartWidth / effectiveWidth
-  const leftOffset = (effectiveWidth - visibleData.length) * candleWidth
+  // Calculate candle width to match candle drawing (no offset)
+  const candleWidth = chartWidth / visibleData.length
+  const leftOffset = 0  // No offset needed since baseWidth = visibleData.length
 
   const priceToY = (price: number) => {
     return padding.top + ((maxPrice - price) / priceRange) * chartHeight
@@ -276,6 +333,39 @@ export function drawFvgPatterns(
 
     // Ensure gap is visible
     if (gapHeight < 2) return
+
+    // Store dot/box position for click detection
+    const dotRadius = pattern.expanded ? 0 : 8  // 8px radius for easier clicking
+    const dotX = xStart + candleWidth / 2
+    const dotY = (gapTop + gapBottom) / 2
+
+    ;(pattern as any).dotX = dotX
+    ;(pattern as any).dotY = dotY
+    ;(pattern as any).dotRadius = dotRadius
+    ;(pattern as any).boxLeft = xStart
+    ;(pattern as any).boxTop = gapTop
+    ;(pattern as any).boxRight = xStart + gapWidth
+    ;(pattern as any).boxBottom = gapBottom
+
+    // If not expanded, just draw a dot indicator
+    if (!pattern.expanded) {
+      const dotColor = pattern.type === 'bullish' ? '#22c55e' : '#ef4444'
+
+      // Draw dot with border
+      ctx.beginPath()
+      ctx.arc(dotX, dotY, dotRadius, 0, 2 * Math.PI)
+      ctx.fillStyle = dotColor
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.lineWidth = 2
+      ctx.stroke()
+
+      console.log(`[FVG Draw] Drew dot for ${pattern.id} at (${dotX.toFixed(1)}, ${dotY.toFixed(1)}) radius=${dotRadius}`)
+
+      return // Skip drawing full box if not expanded
+    }
+
+    console.log(`[FVG Draw] Drew expanded box for ${pattern.id}`)
 
     // Draw semi-transparent gap rectangle with stronger color
     const color = pattern.type === 'bullish'
