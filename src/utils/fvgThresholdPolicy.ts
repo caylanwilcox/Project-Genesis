@@ -15,12 +15,12 @@ export function getFvgGapSettingsForTimeframe(timeframe: Timeframe): FvgGapSetti
   switch (timeframe) {
     case '1m':
     case '5m':
-      // Intraday minute charts: very tight gaps (0.1% - 2%)
+      // Intraday minute charts: very tight gaps (0.05% - 2%)
       return {
-        min: 0.1,
+        min: 0.05,
         max: 2.0,
         defaultValue: 0.3,
-        step: 0.1,
+        step: 0.05,
       }
 
     case '15m':

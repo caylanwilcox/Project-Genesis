@@ -21,6 +21,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = (props) => {
     targets,
     entryPoint,
     showFvg = false,
+    fvgPercentage,
     onFvgCountChange,
     onVisibleBarCountChange,
     isLoadingMore = false,
@@ -79,6 +80,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = (props) => {
         mousePos={orchestrator.interaction.mousePos}
         isPanning={orchestrator.interaction.isPanning}
         showFvg={showFvg}
+        fvgPercentage={fvgPercentage}
         onFvgCountChange={onFvgCountChange}
         onVisibleBarCountChange={onVisibleBarCountChange}
         priceOffset={orchestrator.viewport.state.priceOffset}

@@ -28,6 +28,7 @@ interface ChartCanvasProps {
   mousePos: { x: number; y: number } | null
   isPanning: boolean
   showFvg: boolean
+  fvgPercentage?: number
   onFvgCountChange?: (count: number) => void
   onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
   priceOffset: number
@@ -79,6 +80,7 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
   mousePos,
   isPanning,
   showFvg,
+  fvgPercentage,
   onFvgCountChange,
   onVisibleBarCountChange,
   priceOffset,
@@ -148,6 +150,7 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
         mousePos={mousePos}
         isPanning={isPanning}
         showFvg={showFvg}
+        fvgPercentage={fvgPercentage}
         onFvgCountChange={onFvgCountChange}
         onVisibleBarCountChange={onVisibleBarCountChange}
         priceOffset={priceOffset}

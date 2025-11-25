@@ -89,7 +89,8 @@ export function useChartInteraction(
       // This gives consistent drag-to-scroll behavior regardless of how much data is loaded
       const visibleCandles = Math.min(120, data.length) // Match the visible window size from hooks.ts
       const candlesPerPixel = visibleCandles / rect.width
-      const candleDelta = deltaX * candlesPerPixel // Positive: drag left = scroll back in time
+      const panSensitivity = 2.0 // Increase sensitivity to make panning easier
+      const candleDelta = deltaX * candlesPerPixel * panSensitivity // Positive: drag left = scroll back in time
       const newOffsetX = panStart.offsetX + candleDelta
 
       const maxOffset = Math.max(0, data.length)
@@ -195,7 +196,8 @@ export function useChartInteraction(
       // Base panning sensitivity on visible candles, not total data length
       const visibleCandles = Math.min(120, data.length) // Match the visible window size from hooks.ts
       const candlesPerPixel = visibleCandles / rect.width
-      const candleDelta = deltaX * candlesPerPixel // Positive: drag left = scroll back in time
+      const panSensitivity = 2.0 // Increase sensitivity to make panning easier
+      const candleDelta = deltaX * candlesPerPixel * panSensitivity // Positive: drag left = scroll back in time
       const newOffsetX = panStart.offsetX + candleDelta
 
       const maxOffset = Math.max(0, data.length)

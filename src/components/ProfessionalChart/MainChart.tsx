@@ -24,6 +24,7 @@ interface MainChartProps {
   mousePos: { x: number; y: number } | null
   isPanning: boolean
   showFvg?: boolean
+  fvgPercentage?: number
   onFvgCountChange?: (count: number) => void
   onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
   priceOffset?: number
@@ -44,6 +45,7 @@ export const MainChart: React.FC<MainChartProps> = ({
   mousePos,
   isPanning,
   showFvg = false,
+  fvgPercentage,
   onFvgCountChange,
   onVisibleBarCountChange,
   priceOffset = 0,
@@ -127,11 +129,12 @@ export const MainChart: React.FC<MainChartProps> = ({
 
     // Draw FVG patterns if enabled
     if (showFvg && data.length >= 3) {
-      // Adjust gap thresholds based on timeframe
+      // Use user-selected percentage or default based on timeframe
       const isMinute = dataTimeframe === '1m' || dataTimeframe === '5m' || dataTimeframe === '15m'
-      const options = isMinute
-        ? { minGapPct: 0.2, maxGapPct: 5.0, recentOnly: false }
-        : { minGapPct: 0.3, maxGapPct: 5.0, recentOnly: false }
+      const defaultGapPct = isMinute ? 0.2 : 0.3
+      const minGapPct = fvgPercentage !== undefined ? fvgPercentage : defaultGapPct
+      console.log('[FVG Detection] Using minGapPct:', minGapPct, 'fvgPercentage:', fvgPercentage, 'default:', defaultGapPct)
+      const options = { minGapPct, maxGapPct: 5.0, recentOnly: false }
 
       // Detect patterns on FULL dataset so overlays persist across zoom/pan
       const detectedPatterns = detectFvgPatterns(data, options)
@@ -214,6 +217,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     dataTimeframe,
     onOverlayTagsUpdate,
     showFvg,
+    fvgPercentage,
     priceOffset,
     displayTimeframe,
     fvgPatterns,

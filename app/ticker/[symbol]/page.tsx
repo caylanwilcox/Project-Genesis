@@ -811,29 +811,53 @@ export default function TickerPage() {
           )}
           <div className="w-full mx-auto relative" style={{ height: '640px' }}>
             {/* FVG Toggle Button */}
-            <div className="absolute top-14 left-2 z-10 flex items-center gap-2">
-              {showFvg && fvgCount > 0 && (
-                <div className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500">
-                  {fvgCount} Pattern{fvgCount !== 1 ? 's' : ''} Found
+            <div className="absolute top-14 left-2 z-10 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                {showFvg && fvgCount > 0 && (
+                  <div className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500">
+                    {fvgCount} Pattern{fvgCount !== 1 ? 's' : ''} Found
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowFvg(!showFvg)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                    showFvg
+                      ? 'bg-green-500/20 text-green-400 border border-green-500 hover:bg-green-500/30'
+                      : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-700/50'
+                  }`}
+                >
+                  {showFvg ? '✓ FVG Detection ON' : 'FVG Detection OFF'}
+                </button>
+                <button
+                  onClick={() => setShowBacktest(true)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-purple-500/20 text-purple-400 border border-purple-500 hover:bg-purple-500/30"
+                  title="View FVG Backtest Results"
+                >
+                  📊 Backtest
+                </button>
+              </div>
+
+              {/* FVG Percentage Radio Buttons */}
+              {showFvg && (
+                <div className="flex items-center gap-2 bg-gray-900/90 px-3 py-2 rounded-lg border border-gray-700">
+                  <span className="text-xs text-gray-400 font-medium">Gap %:</span>
+                  {[0.05, 0.1, 0.15, 0.2, 0.3, 0.5].filter(val => val >= fvgGapSettings.min && val <= fvgGapSettings.max).map(value => (
+                    <label key={value} className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="fvgPercentage"
+                        value={value}
+                        checked={fvgPercentage === value}
+                        onChange={(e) => setFvgPercentage(parseFloat(e.target.value))}
+                        className="w-3 h-3 accent-blue-500"
+                      />
+                      <span className={`text-xs font-semibold ${fvgPercentage === value ? 'text-blue-400' : 'text-gray-400'}`}>
+                        {value.toFixed(2)}%
+                      </span>
+                    </label>
+                  ))}
                 </div>
               )}
-              <button
-                onClick={() => setShowFvg(!showFvg)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                  showFvg
-                    ? 'bg-green-500/20 text-green-400 border border-green-500 hover:bg-green-500/30'
-                    : 'bg-gray-800/50 text-gray-400 border border-gray-700 hover:bg-gray-700/50'
-                }`}
-              >
-                {showFvg ? '✓ FVG Detection ON' : 'FVG Detection OFF'}
-              </button>
-              <button
-                onClick={() => setShowBacktest(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-purple-500/20 text-purple-400 border border-purple-500 hover:bg-purple-500/30"
-                title="View FVG Backtest Results"
-              >
-                📊 Backtest
-              </button>
             </div>
 
             <ProfessionalChart
