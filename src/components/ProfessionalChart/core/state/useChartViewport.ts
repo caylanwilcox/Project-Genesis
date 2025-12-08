@@ -30,10 +30,8 @@ export function useChartViewport(dataLength: number) {
     if (percentChange > 0.5) {
       console.log(`[🔄 RESET] Data ${prevDataLength} → ${dataLength}, panOffset reset to 0`)
       setPanOffset(0)
-    } else {
-      // Small change, just clamp to valid range
-      setPanOffset((prev) => Math.min(prev, Math.max(0, dataLength)))
     }
+    // No clamping on small changes - allow free scrolling
 
     setPrevDataLength(dataLength)
   }, [dataLength, prevDataLength])

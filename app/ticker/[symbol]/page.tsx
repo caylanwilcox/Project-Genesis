@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { usePolygonData, usePolygonSnapshot } from '@/hooks/usePolygonData'
+import { useTimeframeCache } from '@/hooks/useTimeframeCache'
 import { usePolygonWebSocket, aggregateBarToChartData } from '@/hooks/usePolygonWebSocket'
 import { polygonService } from '@/services/polygonService'
 import { polygonWebSocketService, AggregateBar } from '@/services/polygonWebSocket'
@@ -82,6 +83,14 @@ export default function TickerPage() {
   const fvgGapSettings = useMemo(() => getFvgGapSettingsForTimeframe(timeframe), [timeframe])
   const fvgDisplayPrecision = useMemo(() => (fvgGapSettings.step < 0.1 ? 2 : 1), [fvgGapSettings.step])
   const formatFvgPercent = (value: number, precision = value < 1 ? 2 : 1) => value.toFixed(precision)
+
+  // Timeframe cache for seamless zoom transitions
+  const timeframeCache = useTimeframeCache({
+    ticker: symbol?.toUpperCase() || '',
+    initialDisplayTimeframe: defaultDisplayTimeframe,
+    prefetchAdjacent: true,
+    cacheMaxAge: 5 * 60 * 1000, // 5 minutes
+  })
 
   // Centralized policy determines bar limits
   const getBarLimit = (tf: Timeframe): number => {
@@ -873,8 +882,14 @@ export default function TickerPage() {
               onVisibleBarCountChange={handleVisibleBarCountChange}
               onLoadMoreData={handleLoadMoreData}
               isLoadingMore={isLoadingMoreData}
+              isTimeframeCached={timeframeCache.isTimeframeCached}
               onTimeframeChange={(tf, displayTf, intervalLabelOverride) => {
                 console.log('[TickerPage] Timeframe changed to:', tf, 'Display:', displayTf, 'Interval:', intervalLabelOverride);
+
+                // Try to switch using cache for instant transition
+                const wasCached = timeframeCache.switchTimeframe(displayTf);
+                console.log(`[TickerPage] Timeframe switch was ${wasCached ? 'instant (cached)' : 'slow (fetching)'}`);
+
                 setTimeframe(tf as any);
                 setDisplayTimeframe(displayTf);
 

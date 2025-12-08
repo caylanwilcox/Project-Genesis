@@ -36,6 +36,7 @@ interface ChartCanvasProps {
   customHeight: number | null
   onHeightChange: (height: number) => void
   className: string
+  ticker?: string  // For ML predictions
   interaction: {
     handleMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void
     handleMouseMove: (e: React.MouseEvent<HTMLDivElement>, rect: DOMRect) => void
@@ -88,6 +89,7 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
   customHeight,
   onHeightChange,
   className,
+  ticker,
   interaction,
   scaling,
 }) => {
@@ -155,6 +157,8 @@ export const ChartCanvas: React.FC<ChartCanvasProps> = ({
         onVisibleBarCountChange={onVisibleBarCountChange}
         priceOffset={priceOffset}
         chartAreaSize={chartSize}
+        ticker={ticker}
+        enableMLPredictions={showFvg}
       />
 
       <PriceTagsOverlay tags={overlayTags} />

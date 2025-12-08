@@ -24,6 +24,13 @@ export interface FvgPattern {
   fib618?: number  // Fibonacci 61.8% level within gap
   expanded?: boolean  // Whether the FVG is expanded to show full details
   id?: string  // Unique identifier for click tracking
+  // ML Prediction fields
+  mlPrediction?: {
+    winProbability: number
+    recommendation: 'TRADE' | 'CAUTIOUS' | 'SKIP'
+    confidenceTier: 'very_high' | 'high' | 'medium' | 'low'
+    modelAccuracy: number
+  }
 }
 
 /**
@@ -301,9 +308,9 @@ export function drawFvgPatterns(
   baseWidth: number,
   visibleStart: number
 ) {
-  // Calculate candle width to match candle drawing (no offset)
-  const candleWidth = chartWidth / visibleData.length
-  const leftOffset = 0  // No offset needed since baseWidth = visibleData.length
+  // Calculate candle width using baseWidth to match candle drawing
+  const candleWidth = chartWidth / baseWidth
+  const leftOffset = 0
 
   const priceToY = (price: number) => {
     return padding.top + ((maxPrice - price) / priceRange) * chartHeight
@@ -349,18 +356,47 @@ export function drawFvgPatterns(
 
     // If not expanded, just draw a dot indicator
     if (!pattern.expanded) {
-      const dotColor = pattern.type === 'bullish' ? '#22c55e' : '#ef4444'
+      // Color based on ML prediction if available, otherwise use FVG type
+      let dotColor = pattern.type === 'bullish' ? '#22c55e' : '#ef4444'
+      let borderColor = 'rgba(255, 255, 255, 0.9)'
+      let actualRadius = dotRadius
+
+      if (pattern.mlPrediction) {
+        const winProb = pattern.mlPrediction.winProbability
+        if (winProb >= 0.7) {
+          // TRADE - bright green, larger dot
+          dotColor = '#22c55e'
+          borderColor = '#ffffff'
+          actualRadius = dotRadius + 2
+        } else if (winProb >= 0.5) {
+          // CAUTIOUS - yellow/orange
+          dotColor = '#f59e0b'
+          borderColor = 'rgba(255, 255, 255, 0.8)'
+        } else {
+          // SKIP - red/dimmed
+          dotColor = '#ef4444'
+          borderColor = 'rgba(255, 255, 255, 0.5)'
+          actualRadius = dotRadius - 1
+        }
+      }
 
       // Draw dot with border
       ctx.beginPath()
-      ctx.arc(dotX, dotY, dotRadius, 0, 2 * Math.PI)
+      ctx.arc(dotX, dotY, actualRadius, 0, 2 * Math.PI)
       ctx.fillStyle = dotColor
       ctx.fill()
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'
+      ctx.strokeStyle = borderColor
       ctx.lineWidth = 2
       ctx.stroke()
 
-      console.log(`[FVG Draw] Drew dot for ${pattern.id} at (${dotX.toFixed(1)}, ${dotY.toFixed(1)}) radius=${dotRadius}`)
+      // Draw ML probability label next to dot if available
+      if (pattern.mlPrediction) {
+        const prob = Math.round(pattern.mlPrediction.winProbability * 100)
+        ctx.font = 'bold 9px -apple-system, sans-serif'
+        ctx.fillStyle = dotColor
+        ctx.textAlign = 'left'
+        ctx.fillText(`${prob}%`, dotX + actualRadius + 4, dotY + 3)
+      }
 
       return // Skip drawing full box if not expanded
     }
@@ -450,9 +486,11 @@ export function drawFvgPatterns(
     const labelX = xStart + 6
     const labelY = gapTop + 12
 
-    // Expanded label background for 3 lines
+    // Expanded label background - taller if ML prediction available
+    const hasML = !!pattern.mlPrediction
+    const boxHeight = hasML ? 54 : 42
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)'
-    ctx.fillRect(labelX - 3, labelY - 10, 110, 42)
+    ctx.fillRect(labelX - 3, labelY - 10, 110, boxHeight)
 
     // FVG type label
     ctx.font = 'bold 10px -apple-system, sans-serif'
@@ -468,12 +506,27 @@ export function drawFvgPatterns(
     const gapPct = ((gapSize / pattern.entryPrice) * 100).toFixed(1)
     ctx.fillText(`${gapPct}% gap`, labelX, labelY + 12)
 
-    // Confidence score
-    const confidencePct = (pattern.validationScore * 100).toFixed(0)
-    const confidenceColor = pattern.validationScore >= 0.85 ? '#22c55e' :
-                           pattern.validationScore >= 0.65 ? '#eab308' : '#ef4444'
-    ctx.fillStyle = confidenceColor
-    ctx.fillText(`${confidencePct}% conf`, labelX, labelY + 24)
+    // ML Prediction or fallback to validation score
+    if (pattern.mlPrediction) {
+      const mlProb = Math.round(pattern.mlPrediction.winProbability * 100)
+      const mlColor = pattern.mlPrediction.winProbability >= 0.7 ? '#22c55e' :
+                      pattern.mlPrediction.winProbability >= 0.5 ? '#f59e0b' : '#ef4444'
+      ctx.fillStyle = mlColor
+      ctx.font = 'bold 9px monospace'
+      ctx.fillText(`ML: ${mlProb}% win`, labelX, labelY + 24)
+
+      // Recommendation
+      ctx.font = '8px monospace'
+      ctx.fillStyle = mlColor
+      ctx.fillText(pattern.mlPrediction.recommendation, labelX, labelY + 36)
+    } else {
+      // Fallback to validation score
+      const confidencePct = (pattern.validationScore * 100).toFixed(0)
+      const confidenceColor = pattern.validationScore >= 0.85 ? '#22c55e' :
+                             pattern.validationScore >= 0.65 ? '#eab308' : '#ef4444'
+      ctx.fillStyle = confidenceColor
+      ctx.fillText(`${confidencePct}% conf`, labelX, labelY + 24)
+    }
 
     // Right side - show ENTRY and TP prices vertically aligned
     const rightLabelX = xStart + gapWidth - 65

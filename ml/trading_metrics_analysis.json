@@ -1,0 +1,50 @@
+{
+  "analyzed_at": "2025-12-08T02:14:43.033584",
+  "test_period": "2024-01-01 to today",
+  "total_trades": 2622,
+  "total_pnl": 1864.5,
+  "results": {
+    "SPY": {
+      "ticker": "SPY",
+      "total_trades": 655,
+      "accuracy": 0.6641221374045801,
+      "win_rate": 0.667175572519084,
+      "profit_factor": 3.0714285714285716,
+      "sharpe_ratio": 8.676398054005896,
+      "max_drawdown": -0.028,
+      "total_pnl": 420.5,
+      "avg_pnl": 0.6419847328244275,
+      "high_conf_count": 592,
+      "high_conf_win_rate": 0.6706081081081081,
+      "high_conf_profit_factor": 3.1377410468319558
+    },
+    "QQQ": {
+      "ticker": "QQQ",
+      "total_trades": 825,
+      "accuracy": 0.7103030303030303,
+      "win_rate": 0.6824242424242424,
+      "profit_factor": 3.3932135728542914,
+      "sharpe_ratio": 9.516919345132347,
+      "max_drawdown": -0.031496062992125984,
+      "total_pnl": 599.5,
+      "avg_pnl": 0.7266666666666667,
+      "high_conf_count": 584,
+      "high_conf_win_rate": 0.7688356164383562,
+      "high_conf_profit_factor": 5.31203007518797
+    },
+    "IWM": {
+      "ticker": "IWM",
+      "total_trades": 1142,
+      "accuracy": 0.6882661996497373,
+      "win_rate": 0.6935201401050788,
+      "profit_factor": 3.566869300911854,
+      "sharpe_ratio": 9.946738079117704,
+      "max_drawdown": -0.04330708661417323,
+      "total_pnl": 844.5,
+      "avg_pnl": 0.739492119089317,
+      "high_conf_count": 863,
+      "high_conf_win_rate": 0.7427578215527231,
+      "high_conf_profit_factor": 4.515011547344111
+    }
+  }
+}

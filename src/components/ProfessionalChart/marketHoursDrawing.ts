@@ -54,16 +54,16 @@ export function drawMarketHoursBackground(
   segments.forEach(segment => {
     const { startIndex, endIndex, isOpen } = segment
 
+    // Only draw market open hours - skip premarket/after-hours
+    if (!isOpen) return
+
     // Calculate x positions for this segment
     const startX = padding.left + leftOffset + (startIndex * candleWidth)
     const endX = padding.left + leftOffset + ((endIndex + 1) * candleWidth)
     const width = endX - startX
 
-    // Set color based on market status
-    // Use very subtle opacity - just a hint of color, not a dark overlay
-    ctx.fillStyle = isOpen
-      ? 'rgba(34, 197, 94, 0.03)'  // Green with 3% opacity for open hours (very subtle)
-      : 'rgba(239, 68, 68, 0.03)'   // Red with 3% opacity for closed hours (very subtle)
+    // Subtle green tint for market open hours
+    ctx.fillStyle = 'rgba(34, 197, 94, 0.03)'
 
     // Draw rectangle covering the time segment
     ctx.fillRect(startX, chartTop, width, chartHeight)

@@ -9,16 +9,18 @@ export function drawCandles(
   minPrice: number,
   maxPrice: number,
   priceRange: number,
-  baseWidth: number
+  baseWidth: number,
+  leftEmptyBars: number = 0
 ) {
   if (visibleData.length === 0) return
 
-  // Calculate candle width to fill the entire chart
-  const candleWidth = chartWidth / visibleData.length
-  const candleSpacing = candleWidth * 0.8
+  // Calculate candle width - make them wider and more visible like Webull
+  const candleWidth = chartWidth / baseWidth
+  const candleSpacing = Math.max(candleWidth * 0.7, 3) // Minimum 3px width for visibility
 
   visibleData.forEach((candle, i) => {
-    const x = padding.left + i * candleWidth + candleWidth / 2
+    // Offset candles by leftEmptyBars to create empty space on the left when scrolling right
+    const x = padding.left + (i + leftEmptyBars) * candleWidth + candleWidth / 2
 
     // Ensure candle stays within chart boundaries
     if (x < padding.left || x > padding.left + chartWidth) return
@@ -52,17 +54,19 @@ export function drawVolumeBars(
   maxVolume: number,
   padding: any,
   chartWidth: number,
-  baseWidth: number
+  baseWidth: number,
+  leftEmptyBars: number = 0
 ) {
   if (visibleData.length === 0) return
 
   const volBarMaxHeight = volChartHeight - 25
 
-  // Calculate candle width to fill the entire chart
-  const candleWidth = chartWidth / visibleData.length
+  // Calculate candle width based on total slots (data + empty space)
+  const candleWidth = chartWidth / baseWidth
 
   visibleData.forEach((candle, i) => {
-    const x = padding.left + i * candleWidth + candleWidth / 2
+    // Offset bars by leftEmptyBars to align with candles
+    const x = padding.left + (i + leftEmptyBars) * candleWidth + candleWidth / 2
 
     // Ensure volume bar stays within chart boundaries
     if (x < padding.left || x > padding.left + chartWidth) return

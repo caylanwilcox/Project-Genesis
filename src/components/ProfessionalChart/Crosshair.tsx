@@ -49,22 +49,19 @@ export const Crosshair: React.FC<CrosshairProps> = ({
     // Don't show crosshair while panning
     if (!mousePos || visibleData.length === 0 || isPanning) return
 
-    // Calculate which candle we're hovering over
+    // Calculate which candle we're hovering over using consistent baseWidth
     const candleWidth = chartWidth / baseWidth
     const relativeX = mousePos.x - padding.left
-    const effectiveWidth = Math.max(baseWidth, visibleData.length)
-    const adjustedCandleWidth = chartWidth / effectiveWidth
-    const leftOffset = (effectiveWidth - visibleData.length) * adjustedCandleWidth
-    const candleIndex = Math.floor((relativeX - leftOffset) / adjustedCandleWidth)
+    const candleIndex = Math.floor(relativeX / candleWidth)
 
-    // Check if we're within bounds
+    // Check if we're within bounds of actual visible data
     if (candleIndex < 0 || candleIndex >= visibleData.length) return
 
     const candle = visibleData[candleIndex]
     if (!candle) return
 
     // Snap to center of candle
-    const snapX = padding.left + leftOffset + candleIndex * adjustedCandleWidth + adjustedCandleWidth / 2
+    const snapX = padding.left + candleIndex * candleWidth + candleWidth / 2
 
     // Calculate price at mouse Y position
     const relativeY = mousePos.y - padding.top

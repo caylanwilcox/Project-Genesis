@@ -13,6 +13,8 @@ export interface ProfessionalChartProps {
   onLoadMoreData?: () => void
   isLoadingMore?: boolean
   fvgPercentage?: number
+  // Optional: check if a timeframe is cached for seamless zoom transitions
+  isTimeframeCached?: (displayTf: string) => boolean
 }
 
 export interface CandleData {

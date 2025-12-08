@@ -8,7 +8,7 @@ import { drawCandles, drawVolumeBars } from './candleDrawing'
 import { drawPriceLines, drawCurrentPriceLine, drawLowPriceMarker, drawHighPriceMarker, PriceTag } from './priceLines'
 import { Crosshair } from './Crosshair'
 import { detectFvgPatterns, drawFvgPatterns, findClickedFvg, FvgPattern } from './fvgDrawing'
-import { drawMarketHoursBackground } from './marketHoursDrawing'
+import { useFvgMLPredictions } from './useFvgMLPredictions'
 
 interface MainChartProps {
   data: CandleData[]
@@ -29,6 +29,8 @@ interface MainChartProps {
   onVisibleBarCountChange?: (count: number, visibleData: CandleData[]) => void
   priceOffset?: number
   chartAreaSize?: { width: number; height: number }
+  ticker?: string  // For ML predictions
+  enableMLPredictions?: boolean  // Toggle ML predictions
 }
 
 export const MainChart: React.FC<MainChartProps> = ({
@@ -50,11 +52,21 @@ export const MainChart: React.FC<MainChartProps> = ({
   onVisibleBarCountChange,
   priceOffset = 0,
   chartAreaSize,
+  ticker = 'SPY',
+  enableMLPredictions = true,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const volumeCanvasRef = useRef<HTMLCanvasElement>(null)
   const [fvgPatterns, setFvgPatterns] = useState<FvgPattern[]>([])
   const drawnPatternsRef = useRef<FvgPattern[]>([]) // Store the patterns with dot positions after drawing
+
+  // Get ML predictions for FVG patterns
+  const patternsWithML = useFvgMLPredictions(
+    fvgPatterns,
+    data,
+    ticker,
+    enableMLPredictions && showFvg
+  )
   const [chartDimensions, setChartDimensions] = useState({
     chartWidth: 0,
     chartHeight: 0,
@@ -87,8 +99,25 @@ export const MainChart: React.FC<MainChartProps> = ({
     const chartHeight = rect.height - padding.top - padding.bottom
     const volChartHeight = volRect.height - 5
 
-    const visibleData = data.slice(visibleRange.start, visibleRange.end)
-    if (visibleData.length === 0) return
+    // Calculate viewport size (how many candle slots are visible)
+    const viewportSize = visibleRange.end - visibleRange.start
+
+    // Clamp slice indices to valid data bounds
+    const clampedStart = Math.max(0, visibleRange.start)
+    const clampedEnd = Math.min(data.length, visibleRange.end)
+    const visibleData = data.slice(clampedStart, clampedEnd)
+
+    // Allow empty chart when scrolled fully into empty space (just show grid)
+    if (visibleData.length === 0) {
+      // Still draw grid but no candles
+      const { padding, gutter, isNarrow } = calculatePadding(parentWidth)
+      drawPriceGrid({ ctx, rect, padding, chartWidth, chartHeight, minPrice: 0, maxPrice: 100, priceRange: 100, isNarrow, gutter })
+      return
+    }
+
+    // Calculate how many empty slots on each side
+    const rightEmptyBars = Math.max(0, visibleRange.end - data.length)
+    const leftEmptyBars = Math.max(0, -visibleRange.start)
 
     // Notify parent of visible bar count and data
     if (onVisibleBarCountChange) {
@@ -97,9 +126,9 @@ export const MainChart: React.FC<MainChartProps> = ({
 
     const { minPrice, maxPrice, priceRange } = calculatePriceRange(visibleData, priceScale, priceOffset)
 
-    // POLICY: Always use visibleData.length as baseWidth for proper alignment
-    // This ensures candles fill the chart width and don't leave empty space
-    const baseWidth = visibleData.length
+    // POLICY: baseWidth = viewport size (not visibleData.length) to maintain consistent candle width
+    // This prevents candles from stretching when scrolling into empty space
+    const baseWidth = viewportSize
 
     setChartDimensions({
       chartWidth,
@@ -115,17 +144,15 @@ export const MainChart: React.FC<MainChartProps> = ({
     drawPriceGrid({ ctx, rect, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, isNarrow, gutter })
     drawTimeGrid(ctx, volCtx, rect, volRect, padding, chartWidth, chartHeight, volChartHeight, visibleData, dataTimeframe, displayTimeframe, isNarrow)
 
-    // Draw market hours background (6am-1pm) for minute/hour timeframes
-    if (dataTimeframe === '1m' || dataTimeframe === '5m' || dataTimeframe === '15m' || dataTimeframe === '30m' || dataTimeframe === '1h') {
-      drawMarketHoursBackground(ctx, visibleData, padding, chartWidth, chartHeight, baseWidth)
-    }
 
-    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth)
+    // When scrolling right (into future/empty space), rightEmptyBars > 0 and candles stay on left (no offset needed)
+    // When scrolling far left (beyond oldest data), leftEmptyBars > 0 and candles shift right
+    drawCandles(ctx, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, 0)
 
     const volumes = visibleData.map(d => d.volume).filter(v => v > 0)
     const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 0
 
-    drawVolumeBars(volCtx, visibleData, volChartHeight, maxVolume, padding, chartWidth, baseWidth)
+    drawVolumeBars(volCtx, visibleData, volChartHeight, maxVolume, padding, chartWidth, baseWidth, 0)
 
     // Draw FVG patterns if enabled
     if (showFvg && data.length >= 3) {
@@ -150,10 +177,16 @@ export const MainChart: React.FC<MainChartProps> = ({
         setFvgPatterns(mergedPatterns)
       }
 
-      drawFvgPatterns(ctx, mergedPatterns, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, visibleRange.start)
+      // Use patterns with ML predictions for drawing
+      const patternsToDrawBase = mergedPatterns.map(p => {
+        const withML = patternsWithML.find(pml => pml.id === p.id)
+        return withML?.mlPrediction ? { ...p, mlPrediction: withML.mlPrediction } : p
+      })
+
+      drawFvgPatterns(ctx, patternsToDrawBase, visibleData, padding, chartWidth, chartHeight, minPrice, maxPrice, priceRange, baseWidth, clampedStart)
 
       // Store the drawn patterns with their dot positions for click detection
-      drawnPatternsRef.current = mergedPatterns
+      drawnPatternsRef.current = patternsToDrawBase
 
       // Notify parent of FVG count
       if (onFvgCountChange) {
@@ -221,6 +254,7 @@ export const MainChart: React.FC<MainChartProps> = ({
     priceOffset,
     displayTimeframe,
     fvgPatterns,
+    patternsWithML,
     chartAreaSize?.width,
     chartAreaSize?.height,
   ])

@@ -196,4 +196,50 @@ export const INTERVAL_LABELS: string[] = [
   '1 min', '5 min', '15 min', '30 min', '1 hour', '2 hour', '4 hour', '1 day', '1 week', '1 month',
 ]
 
+// Ordered display timeframes from shortest to longest duration
+export const TIMEFRAME_PROGRESSION: string[] = [
+  '1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'All',
+]
+
+/**
+ * Get the next coarser (longer) timeframe when zooming out
+ * Returns undefined if already at the coarsest timeframe
+ */
+export function getNextCoarserTimeframe(currentDisplayTimeframe: string): string | undefined {
+  const currentIndex = TIMEFRAME_PROGRESSION.indexOf(currentDisplayTimeframe)
+  if (currentIndex === -1 || currentIndex >= TIMEFRAME_PROGRESSION.length - 1) {
+    return undefined
+  }
+  return TIMEFRAME_PROGRESSION[currentIndex + 1]
+}
+
+/**
+ * Get the next finer (shorter) timeframe when zooming in
+ * Returns undefined if already at the finest timeframe
+ */
+export function getNextFinerTimeframe(currentDisplayTimeframe: string): string | undefined {
+  const currentIndex = TIMEFRAME_PROGRESSION.indexOf(currentDisplayTimeframe)
+  if (currentIndex <= 0) {
+    return undefined
+  }
+  return TIMEFRAME_PROGRESSION[currentIndex - 1]
+}
+
+/**
+ * Get zoom thresholds for transitioning between timeframes
+ * Returns the timeScale values at which we should transition to coarser/finer timeframes
+ */
+export function getZoomTransitionThresholds(_displayTimeframe: string): {
+  zoomOutThreshold: number  // When timeScale drops below this, go to coarser timeframe
+  zoomInThreshold: number   // When timeScale exceeds this, go to finer timeframe
+} {
+  // Default thresholds - transition when zoomed out to show 3x more candles (scale 0.33)
+  // or zoomed in to show 3x fewer candles (scale 3.0)
+  // Note: _displayTimeframe can be used in the future for timeframe-specific thresholds
+  return {
+    zoomOutThreshold: 0.25,  // Very zoomed out - show coarser timeframe
+    zoomInThreshold: 2.5,    // Very zoomed in - show finer timeframe
+  }
+}
+
 

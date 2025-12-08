@@ -175,30 +175,27 @@ export function useVisibleRange(
     if (data.length === 0) return
 
     const baseCandlesInView = getDefaultBarsForView(displayTimeframe, dataTimeframe, data.length)
-    const zoomedCandlesInView = Math.round(baseCandlesInView / timeScale) // timeScale > 1 = zoom in (fewer candles), < 1 = zoom out (more candles)
-    const effectiveCandlesInView = Math.max(20, Math.min(data.length, zoomedCandlesInView)) // Clamp to reasonable range
+    const zoomedCandlesInView = Math.round(baseCandlesInView / Math.max(timeScale, 0.05)) // timeScale > 1 = zoom in (fewer candles), < 1 = zoom out (more candles)
+    // Clamp to data.length max when zooming out, minimum 10 candles when zoomed in
+    const effectiveCandlesInView = Math.max(10, Math.min(data.length, zoomedCandlesInView))
 
     // panOffset = how many candles we've scrolled back from the latest data
-    const scrollBack = Math.max(0, Math.floor(panOffset))
+    // Negative panOffset = scrolling right past the last candle (into empty space)
+    const scrollBack = Math.floor(panOffset)
 
     // Calculate visible range - the window size can change based on zoom (timeScale),
     // and slides through the entire dataset as user pans left/right
     //
-    // CRITICAL: When panOffset = 0, we MUST show the most recent data
-    // The end should ALWAYS be data.length when not panning (panOffset = 0)
-    // The start should be calculated backwards from the end
-    //
     // When panOffset = 0: end = data.length (show most recent)
-    // When panOffset > 0: end = data.length - scrollBack (scroll back in time)
+    // When panOffset > 0: end < data.length (scroll back in time / left)
+    // When panOffset < 0: end > data.length (scroll into future / right - empty space)
     const end = data.length - scrollBack
     const start = end - effectiveCandlesInView
 
-    // Clamp to valid data range
-    // IMPORTANT: actualEnd must ALWAYS equal end when scrollBack = 0
-    // This ensures we ALWAYS show the most recent data when panOffset = 0
-    // Even if start is negative (less data than desired view), we keep end anchored
-    const actualEnd = Math.max(0, Math.min(data.length, end))
-    const actualStart = Math.max(0, start)
+    // Allow scrolling beyond data bounds - don't clamp end to data.length
+    // This allows free navigation into empty space on the right
+    const actualEnd = end
+    const actualStart = start
 
     console.log(`[📊 VIEWPORT] Showing bars ${actualStart}-${actualEnd} of ${data.length} (panOffset=${panOffset.toFixed(0)})`)
     setVisibleRange({ start: actualStart, end: actualEnd })

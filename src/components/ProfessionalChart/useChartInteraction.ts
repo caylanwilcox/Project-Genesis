@@ -13,7 +13,8 @@ export function useChartInteraction(
   setPriceOffset: (offset: number) => void,
   displayTimeframe?: string,
   dataTimeframe?: Timeframe,
-  onReachLeftEdge?: () => void
+  onReachLeftEdge?: () => void,
+  onZoomTransition?: (timeScale: number) => string | undefined
 ) {
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null)
@@ -32,13 +33,16 @@ export function useChartInteraction(
   }, [timeScale])
 
   const clampRatio = useCallback((value: number) => Math.min(1, Math.max(0, value)), [])
-  const clampScale = useCallback((value: number) => Math.max(0.2, Math.min(5, value)), [])
+  // Scale: >1 = zoom in (fewer candles, wider), <1 = zoom out (more candles, thinner)
+  // Allow zooming out to 0.05 (20x more candles) and in to 5 (5x fewer candles)
+  const clampScale = useCallback((value: number) => Math.max(0.05, Math.min(5, value)), [])
 
   const calcEffectiveCandles = useCallback((scale: number) => {
     if (data.length === 0) return 0
     const base = getDefaultBarsForView(displayTimeframe, dataTimeframe, data.length)
-    const zoomed = Math.round(base / Math.max(scale, 0.01))
-    return Math.max(1, Math.min(data.length, Math.max(20, zoomed)))
+    const zoomed = Math.round(base / Math.max(scale, 0.05))
+    // Clamp to data.length max when zooming out, minimum 10 candles when zoomed in
+    return Math.max(10, Math.min(data.length, zoomed))
   }, [data.length, displayTimeframe, dataTimeframe])
 
   const adjustPanForZoom = useCallback((prevScale: number, newScale: number, pointerRatio: number) => {
@@ -48,23 +52,15 @@ export function useChartInteraction(
     const effNew = calcEffectiveCandles(newScale)
     if (effOld === 0 || effNew === 0) return
 
-    const endOld = Math.max(0, Math.min(data.length, data.length - panOffsetRef.current))
-    const startOld = Math.max(0, endOld - effOld)
+    const endOld = data.length - panOffsetRef.current
+    const startOld = endOld - effOld
     const pointerIndex = startOld + ratio * effOld
 
-    let startNew = pointerIndex - ratio * effNew
-    let endNew = startNew + effNew
+    const startNew = pointerIndex - ratio * effNew
+    const endNew = startNew + effNew
 
-    if (startNew < 0) {
-      startNew = 0
-      endNew = effNew
-    }
-    if (endNew > data.length) {
-      endNew = data.length
-      startNew = Math.max(0, endNew - effNew)
-    }
-
-    const scrollBack = Math.max(0, data.length - endNew)
+    // No clamping - allow free navigation
+    const scrollBack = data.length - endNew
     setPanOffset(scrollBack)
   }, [calcEffectiveCandles, clampRatio, data.length, setPanOffset])
 
@@ -73,7 +69,18 @@ export function useChartInteraction(
     const nextScale = clampScale(targetScale)
     adjustPanForZoom(prevScale, nextScale, pointerRatio)
     setTimeScale(nextScale)
-  }, [adjustPanForZoom, clampScale, setTimeScale])
+
+    // Check if we should transition to a different timeframe
+    if (onZoomTransition) {
+      const newTimeframe = onZoomTransition(nextScale)
+      if (newTimeframe) {
+        // Timeframe changed - reset scale to 1 for smooth continuation
+        // This creates a seamless zoom experience where zooming out
+        // eventually transitions to a coarser timeframe with scale reset
+        setTimeScale(1)
+      }
+    }
+  }, [adjustPanForZoom, clampScale, setTimeScale, onZoomTransition])
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     console.log('[ChartInteraction] Mouse down - starting pan', { panOffset, priceOffset })
@@ -93,18 +100,18 @@ export function useChartInteraction(
       const candleDelta = deltaX * candlesPerPixel * panSensitivity // Positive: drag left = scroll back in time
       const newOffsetX = panStart.offsetX + candleDelta
 
-      const maxOffset = Math.max(0, data.length)
-      const minOffset = 0
-      const clampedOffset = Math.max(minOffset, Math.min(maxOffset, newOffsetX))
-
-      console.log(`[ChartInteraction] deltaX=${deltaX.toFixed(1)}, candleDelta=${candleDelta.toFixed(1)}, newOffset=${newOffsetX.toFixed(1)}, clamped=${clampedOffset.toFixed(1)}, data.length=${data.length}`)
+      // Allow free scrolling with soft limits
+      // Positive = scroll left into history, Negative = scroll right into empty future space
+      const maxLeftScroll = data.length // Can scroll back through all history
+      const maxRightScroll = -50 // Can scroll 50 candle-widths into empty space on right
+      const clampedOffset = Math.max(maxRightScroll, Math.min(maxLeftScroll, newOffsetX))
       setPanOffset(clampedOffset)
 
       // If user is panning left (increasing panOffset) and has reached near the left edge of data
       // trigger callback to load more historical data
       // Debounce to prevent multiple rapid triggers (2 second cooldown)
       const leftEdgeThreshold = data.length - 20 // Within 20 bars of the oldest data
-      if (newOffsetX > leftEdgeThreshold && onReachLeftEdge) {
+      if (clampedOffset > leftEdgeThreshold && onReachLeftEdge) {
         const now = Date.now()
         if (now - lastLoadTrigger > 2000) {
           console.log('[ChartInteraction] Reached left edge, triggering onReachLeftEdge callback')
@@ -200,16 +207,18 @@ export function useChartInteraction(
       const candleDelta = deltaX * candlesPerPixel * panSensitivity // Positive: drag left = scroll back in time
       const newOffsetX = panStart.offsetX + candleDelta
 
-      const maxOffset = Math.max(0, data.length)
-      const minOffset = 0
-      const clampedOffset = Math.max(minOffset, Math.min(maxOffset, newOffsetX))
+      // Allow free scrolling with soft limits
+      // Positive = scroll left into history, Negative = scroll right into empty future space
+      const maxLeftScroll = data.length // Can scroll back through all history
+      const maxRightScroll = -50 // Can scroll 50 candle-widths into empty space on right
+      const clampedOffset = Math.max(maxRightScroll, Math.min(maxLeftScroll, newOffsetX))
       setPanOffset(clampedOffset)
 
       // If user is panning left (increasing panOffset) and has reached near the left edge of data
       // trigger callback to load more historical data
       // Debounce to prevent multiple rapid triggers (2 second cooldown)
       const leftEdgeThreshold = data.length - 20 // Within 20 bars of the oldest data
-      if (newOffsetX > leftEdgeThreshold && onReachLeftEdge) {
+      if (clampedOffset > leftEdgeThreshold && onReachLeftEdge) {
         const now = Date.now()
         if (now - lastLoadTrigger > 2000) {
           console.log('[ChartInteraction] Reached left edge (touch), triggering onReachLeftEdge callback')

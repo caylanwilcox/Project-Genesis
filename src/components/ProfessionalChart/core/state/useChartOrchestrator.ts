@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { CandleData, ProfessionalChartProps } from '../../types'
 import type { PriceTag } from '../../priceLines'
 import { useChartData, useCurrentTime, useFullscreen, useVisibleRange } from '../../hooks'
+import { filterMarketHoursData } from '@/utils/marketHours'
 import { useChartScaling } from '../../useChartScaling'
 import { useChartInteraction } from '../../useChartInteraction'
 import { useTimeframeState } from './useTimeframeState'
@@ -19,6 +20,7 @@ export function useChartOrchestrator(props: ProfessionalChartProps) {
     onTimeframeChange,
     onLoadMoreData,
     isLoadingMore,
+    isTimeframeCached,
   } = props
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -27,12 +29,21 @@ export function useChartOrchestrator(props: ProfessionalChartProps) {
 
   // Data management
   const { data } = useChartData(externalData, currentPrice, onDataUpdate)
+
+  // Track dataTimeframe separately for filtering before timeframe hook
+  const [dataTimeframeForFilter, setDataTimeframeForFilter] = useState('1m')
+
   const chartData = useMemo(() => {
-    if (data.length > 0) {
-      return data
+    let processedData = data.length > 0 ? data : generateMockData(currentPrice)
+
+    // Filter out premarket/after-hours for intraday timeframes
+    const isIntraday = ['1m', '5m', '15m', '30m', '1h'].includes(dataTimeframeForFilter)
+    if (isIntraday) {
+      processedData = filterMarketHoursData(processedData)
     }
-    return generateMockData(currentPrice)
-  }, [data, currentPrice])
+
+    return processedData
+  }, [data, currentPrice, dataTimeframeForFilter])
 
   // Viewport state
   const viewport = useChartViewport(chartData.length)
@@ -49,8 +60,13 @@ export function useChartOrchestrator(props: ProfessionalChartProps) {
 
   // Timeframe state
   const timeframe = useTimeframeState({
-    onTimeframeChange,
+    onTimeframeChange: (tf, displayTf, intervalLabel) => {
+      setDataTimeframeForFilter(tf)
+      onTimeframeChange?.(tf, displayTf, intervalLabel)
+    },
     onResetScales: resetScales,
+    // Only allow zoom transitions to timeframes that are already cached
+    canTransitionTo: isTimeframeCached,
   })
 
   // Visible range calculation
@@ -78,7 +94,8 @@ export function useChartOrchestrator(props: ProfessionalChartProps) {
     viewport.actions.setPriceOffset,
     timeframe.state.displayTimeframe,
     timeframe.state.dataTimeframe,
-    handleReachLeftEdge
+    handleReachLeftEdge,
+    timeframe.actions.checkZoomTransition
   )
 
   // Time and fullscreen

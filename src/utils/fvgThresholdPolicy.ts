@@ -105,3 +105,7 @@ export function clampFvgGapForTimeframe(gapPercent: number, timeframe: Timeframe
   const settings = getFvgGapSettingsForTimeframe(timeframe)
   return Math.max(settings.min, Math.min(settings.max, gapPercent))
 }
+
+
+
+

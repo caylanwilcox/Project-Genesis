@@ -88,6 +88,7 @@ export const ProfessionalChart: React.FC<ProfessionalChartProps> = (props) => {
         customHeight={orchestrator.viewport.state.customHeight}
         onHeightChange={orchestrator.viewport.actions.setCustomHeight}
         className={chartAreaClassName}
+        ticker={symbol}
         interaction={orchestrator.interaction}
         scaling={orchestrator.scaling}
       />
