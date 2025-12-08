@@ -32,12 +32,9 @@ MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
 # Supported tickers
 SUPPORTED_TICKERS = ['SPY', 'QQQ', 'IWM']
 
-# Try to import yfinance for daily predictions
-try:
-    import yfinance as yf
-    HAS_YFINANCE = True
-except ImportError:
-    HAS_YFINANCE = False
+# Polygon.io API for market data
+import requests
+POLYGON_API_KEY = os.environ.get('POLYGON_API_KEY', '')
 
 # Categorical encoding mappings
 CATEGORICAL_MAPPINGS = {
@@ -434,6 +431,45 @@ def list_models():
     })
 
 
+def fetch_polygon_data(ticker: str, days: int = 100) -> pd.DataFrame:
+    """Fetch historical daily data from Polygon.io"""
+    if not POLYGON_API_KEY:
+        raise ValueError("POLYGON_API_KEY not set")
+
+    from datetime import datetime, timedelta
+
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{start_date}/{end_date}"
+    params = {
+        'adjusted': 'true',
+        'sort': 'asc',
+        'limit': 5000,
+        'apiKey': POLYGON_API_KEY
+    }
+
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if 'results' not in data or len(data['results']) == 0:
+        raise ValueError(f"No data returned for {ticker}")
+
+    df = pd.DataFrame(data['results'])
+    df['date'] = pd.to_datetime(df['t'], unit='ms')
+    df = df.rename(columns={
+        'o': 'Open',
+        'h': 'High',
+        'l': 'Low',
+        'c': 'Close',
+        'v': 'Volume'
+    })
+    df = df.set_index('date')
+    df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
+
+    return df
+
+
 def calculate_daily_features(df):
     """Calculate features for daily prediction from OHLCV data"""
     # Price changes
@@ -512,13 +548,12 @@ def daily_prediction():
     if ticker not in daily_models:
         return jsonify({'error': f'No daily model for {ticker}'}), 404
 
-    if not HAS_YFINANCE:
-        return jsonify({'error': 'yfinance not installed on server'}), 500
+    if not POLYGON_API_KEY:
+        return jsonify({'error': 'POLYGON_API_KEY not configured'}), 500
 
     try:
-        # Fetch recent data
-        stock = yf.Ticker(ticker)
-        df = stock.history(period="3mo")
+        # Fetch recent data from Polygon
+        df = fetch_polygon_data(ticker, days=100)
 
         if len(df) < 50:
             return jsonify({'error': 'Insufficient historical data'}), 500
@@ -606,8 +641,8 @@ def daily_prediction():
 @app.route('/morning_briefing', methods=['GET'])
 def morning_briefing():
     """Get morning briefing for all tickers"""
-    if not HAS_YFINANCE:
-        return jsonify({'error': 'yfinance not installed on server'}), 500
+    if not POLYGON_API_KEY:
+        return jsonify({'error': 'POLYGON_API_KEY not configured'}), 500
 
     briefing = {
         'generated_at': datetime.now().isoformat(),
@@ -628,9 +663,8 @@ def morning_briefing():
             continue
 
         try:
-            # Fetch data
-            stock = yf.Ticker(ticker)
-            df = stock.history(period="3mo")
+            # Fetch data from Polygon
+            df = fetch_polygon_data(ticker, days=100)
 
             if len(df) < 50:
                 briefing['tickers'][ticker] = {'error': 'Insufficient data'}
