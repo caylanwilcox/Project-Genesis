@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
 import { useMultiTickerData } from '@/hooks/useMultiTickerData'
+import { MLMorningBriefing } from '@/components/MLMorningBriefing'
 
 interface TickerData {
   symbol: string
@@ -390,9 +391,14 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ML Morning Briefing */}
+      <div className="px-2 pt-14 md:pt-12 md:px-4">
+        <MLMorningBriefing />
+      </div>
+
       {/* Responsive Grid Layout */}
-      <div className="min-h-screen pt-14 md:pt-12">
-        <div className="flex flex-col gap-2 p-2 md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-3rem)] md:p-0">
+      <div className="min-h-screen pt-4 md:pt-4">
+        <div className="flex flex-col gap-2 p-2 md:grid md:grid-cols-2 md:grid-rows-2 md:gap-0 md:h-[calc(100vh-12rem)] md:p-0">
             {tickers.map((ticker) => (
               <div
                 key={ticker.symbol}
