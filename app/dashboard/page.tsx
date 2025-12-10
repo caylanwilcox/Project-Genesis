@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
 import { useMultiTickerData } from '@/hooks/useMultiTickerData'
 import { MLMorningBriefing } from '@/components/MLMorningBriefing'
+import { VolatilityMeter } from '@/components/VolatilityMeter'
 
 interface TickerData {
   symbol: string
@@ -238,9 +239,12 @@ export default function Dashboard() {
   // Determine market status based on time
   useEffect(() => {
     const updateMarketStatus = () => {
+      // Convert to Eastern Time
       const now = new Date()
-      const hours = now.getHours()
-      const day = now.getDay()
+      const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      const hours = etTime.getHours()
+      const minutes = etTime.getMinutes()
+      const day = etTime.getDay()
 
       // Weekend
       if (day === 0 || day === 6) {
@@ -248,8 +252,8 @@ export default function Dashboard() {
         return
       }
 
-      // Weekday
-      if (hours < 9 || (hours === 9 && now.getMinutes() < 30)) {
+      // Weekday - check against ET market hours
+      if (hours < 9 || (hours === 9 && minutes < 30)) {
         setMarketStatus('Pre-Market')
       } else if (hours < 16) {
         setMarketStatus('Open')
@@ -391,8 +395,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ML Morning Briefing */}
-      <div className="px-2 pt-14 md:pt-12 md:px-4">
+      {/* ML Morning Briefing & Volatility Meter */}
+      <div className="px-2 pt-14 md:pt-12 md:px-4 space-y-2">
+        <VolatilityMeter />
         <MLMorningBriefing />
       </div>
 
