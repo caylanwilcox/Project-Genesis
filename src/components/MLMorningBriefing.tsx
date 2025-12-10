@@ -482,24 +482,31 @@ export function MLMorningBriefing() {
                 </div>
               </div>
 
-              {/* Probability bar - show probability matching signal direction */}
+              {/* Probability display - show both bull/bear with edge over coin flip */}
               <div className="mt-2">
-                <div className="flex items-center justify-between text-xs mb-1">
-                  <span className={sig.signal === 'BUY' ? 'text-green-400' : sig.signal === 'SELL' ? 'text-red-400' : 'text-yellow-400'}>
-                    {sig.signal === 'BUY' ? 'Bullish' : sig.signal === 'SELL' ? 'Bearish' : 'Neutral'} Probability
-                  </span>
-                  <span className={sig.signal === 'BUY' ? 'text-green-400' : sig.signal === 'SELL' ? 'text-red-400' : 'text-yellow-400'}>
-                    {sig.signal === 'SELL' ? ((1 - sig.probability) * 100).toFixed(0) : (sig.probability * 100).toFixed(0)}%
-                  </span>
+                {/* Bull vs Bear bar */}
+                <div className="flex items-center gap-2 text-xs mb-1">
+                  <span className="text-green-400 w-16 text-right">{(sig.probability * 100).toFixed(0)}% Bull</span>
+                  <div className="flex-1 h-2 bg-gray-700 rounded overflow-hidden flex">
+                    <div className="h-full bg-green-500" style={{ width: `${sig.probability * 100}%` }} />
+                    <div className="h-full bg-red-500" style={{ width: `${(1 - sig.probability) * 100}%` }} />
+                  </div>
+                  <span className="text-red-400 w-16">{((1 - sig.probability) * 100).toFixed(0)}% Bear</span>
                 </div>
-                <div className="flex-1 h-2 bg-gray-700 rounded overflow-hidden">
-                  <div
-                    className={`h-full ${sig.signal === 'BUY' ? 'bg-green-500' : sig.signal === 'SELL' ? 'bg-red-500' : 'bg-yellow-500'}`}
-                    style={{ width: `${sig.signal === 'SELL' ? (1 - sig.probability) * 100 : sig.probability * 100}%` }}
-                  />
-                </div>
-                <div className="text-gray-600 text-xs mt-1">
-                  Model accuracy: {(sig.model_accuracy * 100).toFixed(0)}%
+                {/* Edge indicator */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">
+                    Edge: {Math.abs(sig.probability - 0.5) * 100 < 5 ? (
+                      <span className="text-yellow-400">~Coin flip</span>
+                    ) : (
+                      <span className={sig.probability > 0.5 ? 'text-green-400' : 'text-red-400'}>
+                        +{(Math.abs(sig.probability - 0.5) * 100).toFixed(0)}% {sig.probability > 0.5 ? 'bullish' : 'bearish'}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-gray-600">
+                    Model accuracy: {(sig.model_accuracy * 100).toFixed(0)}%
+                  </span>
                 </div>
               </div>
             </div>
