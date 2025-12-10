@@ -32,6 +32,7 @@ daily_models = {}  # ticker -> daily model data
 highlow_models = {}  # ticker -> high/low model data
 shrinking_models = {}  # ticker -> shrinking range model data
 regime_models = {}  # ticker -> volatility regime models
+intraday_models = {}  # ticker -> intraday session update models
 MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
 
 # Volatility regime thresholds
@@ -145,7 +146,20 @@ def load_models():
             except Exception as e:
                 print(f"  ✗ {ticker} shrinking model failed to load: {e}")
 
-    total_models = len(models) + (1 if combined_model else 0) + len(daily_models) + len(highlow_models) + len(shrinking_models)
+    # Load intraday session update models
+    print("\nLoading Intraday Session models...")
+    for ticker in SUPPORTED_TICKERS:
+        intraday_path = os.path.join(MODELS_DIR, f'{ticker.lower()}_intraday_model.pkl')
+        if os.path.exists(intraday_path):
+            try:
+                with open(intraday_path, 'rb') as f:
+                    intraday_models[ticker] = pickle.load(f)
+                m = intraday_models[ticker]['metrics']
+                print(f"  ✓ {ticker} intraday model loaded (accuracy: {m['accuracy']:.1%})")
+            except Exception as e:
+                print(f"  ✗ {ticker} intraday model failed to load: {e}")
+
+    total_models = len(models) + (1 if combined_model else 0) + len(daily_models) + len(highlow_models) + len(shrinking_models) + len(intraday_models)
     print(f"\nTotal models loaded: {total_models}")
     return total_models > 0
 
@@ -576,6 +590,168 @@ def fetch_intraday_snapshot(ticker: str):
         print(f"Error fetching daily bar for {ticker}: {e}")
 
     return None
+
+
+def get_session_progress():
+    """
+    Calculate how far through the trading session we are (0-1).
+    0 = market open (9:30 ET)
+    1 = market close (4:00 ET)
+    """
+    import pytz
+    et_tz = pytz.timezone('US/Eastern')
+    now_et = datetime.now(et_tz)
+
+    market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+
+    if now_et < market_open:
+        return 0.0
+    if now_et > market_close:
+        return 1.0
+
+    total_minutes = (market_close - market_open).total_seconds() / 60  # 390 minutes
+    elapsed_minutes = (now_et - market_open).total_seconds() / 60
+
+    return min(1.0, max(0.0, elapsed_minutes / total_minutes))
+
+
+def predict_intraday(ticker: str, df: pd.DataFrame, snapshot: dict) -> dict:
+    """
+    Get intraday session-updated prediction.
+
+    Uses current intraday data (price position, high/low so far) to update
+    the daily prediction during market hours.
+
+    Returns:
+        dict with probability, confidence, time_pct, etc. or None if not available
+    """
+    if ticker not in intraday_models:
+        return None
+
+    if not snapshot:
+        return None
+
+    try:
+        model_data = intraday_models[ticker]
+        feature_cols = model_data['feature_cols']
+        scaler = model_data['scaler']
+        models = model_data['models']
+        weights = model_data['weights']
+
+        # Get session progress
+        time_pct = get_session_progress()
+
+        # Get snapshot data
+        current_price = float(snapshot.get('current_price', 0))
+        today_open = float(snapshot.get('today_open', 0))
+        today_high = float(snapshot.get('today_high', 0))
+        today_low = float(snapshot.get('today_low', 0))
+
+        if today_open == 0:
+            return None
+
+        # Get previous day's data from df
+        if len(df) < 2:
+            return None
+
+        prev_day = df.iloc[-2] if len(df) >= 2 else df.iloc[-1]
+        prev_close = float(prev_day['Close'])
+        prev_high = float(prev_day['High'])
+        prev_low = float(prev_day['Low'])
+
+        # Calculate features matching train_intraday_model.py
+        gap = (today_open - prev_close) / prev_close
+        gap_direction = 1 if gap > 0 else (-1 if gap < 0 else 0)
+        gap_size = abs(gap)
+        prev_return = (prev_close - df.iloc[-3]['Close']) / df.iloc[-3]['Close'] if len(df) >= 3 else 0
+        prev_range = (prev_high - prev_low) / prev_close
+
+        # Current position features
+        current_vs_open = (current_price - today_open) / today_open
+        current_vs_open_direction = 1 if current_price > today_open else (-1 if current_price < today_open else 0)
+
+        # Range so far
+        range_so_far = today_high - today_low if today_high > today_low else 0.0001
+        position_in_range = (current_price - today_low) / range_so_far if range_so_far > 0 else 0.5
+        range_so_far_pct = range_so_far / today_open
+        high_so_far_pct = (today_high - today_open) / today_open
+        low_so_far_pct = (today_open - today_low) / today_open
+
+        # Binary features
+        above_open = 1 if current_price > today_open else 0
+        near_high = 1 if (today_high - current_price) < (current_price - today_low) else 0
+
+        # Gap fill status
+        if gap > 0:  # Gap up
+            gap_filled = 1 if today_low <= prev_close else 0
+        else:  # Gap down
+            gap_filled = 1 if today_high >= prev_close else 0
+
+        # Build feature vector
+        features = {
+            'time_pct': time_pct,
+            'time_remaining': 1 - time_pct,
+            'gap': gap,
+            'gap_direction': gap_direction,
+            'gap_size': gap_size,
+            'prev_return': prev_return,
+            'prev_range': prev_range,
+            'current_vs_open': current_vs_open,
+            'current_vs_open_direction': current_vs_open_direction,
+            'position_in_range': position_in_range,
+            'range_so_far_pct': range_so_far_pct,
+            'high_so_far_pct': high_so_far_pct,
+            'low_so_far_pct': low_so_far_pct,
+            'above_open': above_open,
+            'near_high': near_high,
+            'gap_filled': gap_filled,
+        }
+
+        # Create DataFrame with features in correct order
+        X = pd.DataFrame([{col: features.get(col, 0) for col in feature_cols}])[feature_cols]
+        X = X.replace([np.inf, -np.inf], 0).fillna(0)
+        X_scaled = scaler.transform(X)
+
+        # Get ensemble prediction
+        bullish_prob = 0.0
+        for model_name, model in models.items():
+            prob = model.predict_proba(X_scaled)[0][1]
+            bullish_prob += prob * weights.get(model_name, 0.25)
+
+        return {
+            'probability': round(float(bullish_prob), 3),
+            'confidence': round(abs(bullish_prob - 0.5) * 2, 3),
+            'time_pct': round(time_pct, 2),
+            'session_label': get_session_label(time_pct),
+            'current_vs_open': round(current_vs_open * 100, 2),
+            'position_in_range': round(position_in_range * 100, 1),
+            'model_accuracy': round(float(model_data['metrics']['accuracy']), 3),
+        }
+
+    except Exception as e:
+        print(f"Error in intraday prediction for {ticker}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_session_label(time_pct: float) -> str:
+    """Convert time percentage to human-readable session label"""
+    if time_pct < 0.05:
+        return "Pre-market / Open"
+    elif time_pct < 0.15:
+        return "First 30 min"
+    elif time_pct < 0.30:
+        return "Morning session"
+    elif time_pct < 0.50:
+        return "Mid-morning"
+    elif time_pct < 0.70:
+        return "Afternoon"
+    elif time_pct < 0.90:
+        return "Late session"
+    else:
+        return "Power hour"
 
 
 def calculate_daily_features(df):
@@ -1377,13 +1553,77 @@ def daily_signals():
                     'capture_rate': highlow_pred['capture_rate'],
                 }
 
+            # Get intraday session-updated prediction (during market hours)
+            intraday_pred = None
+            intraday_model_data = None
+            display_probability = bullish_prob  # Default to daily model
+            display_accuracy = float(model_data['metrics']['accuracy'])
+
+            if not after_hours and snapshot:
+                intraday_pred = predict_intraday(ticker, df, snapshot)
+                if intraday_pred and intraday_pred['time_pct'] > 0.05:
+                    # Use intraday prediction if we're past the first few minutes
+                    display_probability = intraday_pred['probability']
+                    display_accuracy = intraday_pred['model_accuracy']
+
+                    # Update signal based on intraday prediction
+                    if display_probability >= 0.70:
+                        signal = 'BUY'
+                        strength = 'STRONG'
+                        action_emoji = '🟢🟢'
+                    elif display_probability >= 0.60:
+                        signal = 'BUY'
+                        strength = 'MODERATE'
+                        action_emoji = '🟢'
+                    elif display_probability >= 0.55:
+                        signal = 'BUY'
+                        strength = 'WEAK'
+                        action_emoji = '🟢'
+                    elif display_probability <= 0.30:
+                        signal = 'SELL'
+                        strength = 'STRONG'
+                        action_emoji = '🔴🔴'
+                    elif display_probability <= 0.40:
+                        signal = 'SELL'
+                        strength = 'MODERATE'
+                        action_emoji = '🔴'
+                    elif display_probability <= 0.45:
+                        signal = 'SELL'
+                        strength = 'WEAK'
+                        action_emoji = '🔴'
+                    else:
+                        signal = 'HOLD'
+                        strength = 'NEUTRAL'
+                        action_emoji = '🟡'
+
+                    # Recalculate targets based on updated signal
+                    if signal == 'BUY':
+                        target = target_high
+                        stop_loss = target_low
+                    elif signal == 'SELL':
+                        target = target_low
+                        stop_loss = target_high
+                    else:
+                        target = current_price
+                        stop_loss = current_price
+
+                    intraday_model_data = {
+                        'probability': intraday_pred['probability'],
+                        'confidence': intraday_pred['confidence'],
+                        'time_pct': intraday_pred['time_pct'],
+                        'session_label': intraday_pred['session_label'],
+                        'current_vs_open': intraday_pred['current_vs_open'],
+                        'position_in_range': intraday_pred['position_in_range'],
+                        'model_accuracy': intraday_pred['model_accuracy'],
+                    }
+
             ticker_signal = {
                 'signal': signal,
                 'strength': strength,
                 'action': f'{strength} {signal}',
                 'emoji': action_emoji,
-                'probability': round(float(bullish_prob), 3),
-                'confidence': round(abs(bullish_prob - 0.5) * 2, 3),
+                'probability': round(float(display_probability), 3),
+                'confidence': round(abs(display_probability - 0.5) * 2, 3),
                 'current_price': round(current_price, 2),
                 'entry_price': round(entry, 2),
                 'target_price': round(target, 2),
@@ -1394,7 +1634,10 @@ def daily_signals():
                     'low': target_low,
                 },
                 'highlow_model': highlow_model_data,
-                'model_accuracy': round(float(model_data['metrics']['accuracy']), 3),
+                'intraday_model': intraday_model_data,
+                'daily_probability': round(float(bullish_prob), 3),  # Original daily prediction
+                'model_accuracy': round(float(display_accuracy), 3),
+                'prediction_source': 'intraday' if intraday_model_data else 'daily',
             }
 
             signals['tickers'][ticker] = ticker_signal
