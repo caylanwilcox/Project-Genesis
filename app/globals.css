@@ -54,21 +54,21 @@ code {
   box-sizing: border-box;
 }
 
-:::-webkit-scrollbar {
+::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-:::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: #181A20;
 }
 
-:::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: #2B3139;
   border-radius: 3px;
 }
 
-:::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
   background: #3B4149;
 }
 
