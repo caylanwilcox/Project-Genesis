@@ -122,14 +122,19 @@ def calculate_features(df: pd.DataFrame) -> pd.DataFrame:
     df['is_monday'] = (df['day_of_week'] == 0).astype(int)
     df['is_friday'] = (df['day_of_week'] == 4).astype(int)
 
-    # Target: Next day's direction
-    # 1 = bullish (>0.2% gain), 0 = bearish (<-0.2%), 0.5 = neutral
-    df['target'] = (df['daily_return'] > 0.2).astype(int)
+    # Target: NEXT day's direction (shift -1 so features at day t predict return at day t+1)
+    next_return = df['daily_return'].shift(-1)
 
-    # Also create a 3-class target
-    df['target_3class'] = df['daily_return'].apply(
-        lambda x: 2 if x > 0.3 else (0 if x < -0.3 else 1)
-    )
+    # Binary: bullish if next day's return > +0.2%
+    df['target'] = np.where(next_return.isna(), np.nan, (next_return > 0.2).astype(int))
+
+    # Also create a 3-class target on NEXT day's return
+    def to_3class(x):
+        if pd.isna(x):
+            return np.nan
+        return 2 if x > 0.3 else (0 if x < -0.3 else 1)
+
+    df['target_3class'] = next_return.apply(to_3class)
 
     return df
 

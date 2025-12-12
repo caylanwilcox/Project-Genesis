@@ -126,10 +126,13 @@ def calculate_all_features(df: pd.DataFrame) -> pd.DataFrame:
     df['open_position'] = ((df['open'] - df['low']) / (df['high'] - df['low'] + 0.001)).shift(1)
 
     # Gap analysis
-    df['gap'] = ((df['open'] - df['close'].shift(1)) / df['close'].shift(1)) * 100
+    # IMPORTANT: Use DECIMAL gap return for consistency with serving (`ml/predict_server.py`).
+    # Example: +0.25% gap => gap = 0.0025
+    df['gap'] = ((df['open'] - df['close'].shift(1)) / df['close'].shift(1))
     df['gap_abs'] = abs(df['gap'])
-    df['gap_up'] = (df['gap'] > 0.1).astype(int)
-    df['gap_down'] = (df['gap'] < -0.1).astype(int)
+    # 0.1% thresholds expressed as decimals
+    df['gap_up'] = (df['gap'] > 0.001).astype(int)
+    df['gap_down'] = (df['gap'] < -0.001).astype(int)
 
     # ========== CONSECUTIVE DAYS (Mean Reversion) ==========
     df['up_day'] = (df['close'] > df['open']).astype(int)

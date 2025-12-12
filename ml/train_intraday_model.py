@@ -10,7 +10,9 @@ This model updates predictions throughout the trading day based on:
 Training: 2003-2023 (~20 years)
 Testing: 2024-2025 (~2 years)
 
-The model predicts: "Will today close HIGHER than today's open?"
+The model predicts:
+1) Will today close HIGHER than today's open?  (classic "bullish day" label)
+2) Will today close HIGHER than the CURRENT price? (session-updated "from now" label)
 """
 
 import pandas as pd
@@ -81,7 +83,7 @@ def create_session_snapshots(df: pd.DataFrame) -> pd.DataFrame:
     df['prev_range'] = (df['prev_high'] - df['prev_low']) / df['prev_close']
     df['prev_return'] = df['Close'].pct_change().shift(1)
 
-    # Target: Did we close higher than open?
+    # Target A: Did we close higher than open?
     df['bullish_day'] = (df['Close'] > df['Open']).astype(int)
 
     # Day's actual range
@@ -184,6 +186,9 @@ def create_session_snapshots(df: pd.DataFrame) -> pd.DataFrame:
 
             # Target
             snapshot['target'] = row['bullish_day']
+            # Target B: From "now" (this snapshot), will we end above the current price?
+            # Note: at the open, this is identical to bullish_day.
+            snapshot['target_close_above_current'] = 1 if close_price > current_price else 0
 
             snapshots.append(snapshot)
 
@@ -203,53 +208,11 @@ def create_intraday_features(df: pd.DataFrame) -> tuple:
         'above_open', 'near_high', 'gap_filled'
     ]
 
-    return feature_cols, df[feature_cols], df['target']
+    return feature_cols, df[feature_cols], df['target'], df.get('target_close_above_current')
 
 
-def train_intraday_model(ticker: str = 'SPY'):
-    """Train intraday update model"""
-
-    print(f"\n{'='*70}")
-    print(f"  INTRADAY MODEL TRAINING - {ticker}")
-    print(f"{'='*70}")
-
-    # Fetch data
-    df = fetch_daily_data(ticker)
-
-    # Create session snapshots
-    print("\nCreating session snapshots...")
-    snapshots = create_session_snapshots(df)
-    print(f"  Created {len(snapshots)} training samples from {len(df)} days")
-
-    # Split by date
-    train_end = '2023-12-31'
-    test_start = '2024-01-01'
-
-    train_data = snapshots[snapshots['date'] <= train_end]
-    test_data = snapshots[snapshots['date'] >= test_start]
-
-    print(f"\n  TRAIN: {len(train_data)} samples ({train_data['date'].min().strftime('%Y-%m-%d')} to {train_data['date'].max().strftime('%Y-%m-%d')})")
-    print(f"  TEST:  {len(test_data)} samples ({test_data['date'].min().strftime('%Y-%m-%d')} to {test_data['date'].max().strftime('%Y-%m-%d')})")
-
-    # Get features
-    feature_cols, X_train, y_train = create_intraday_features(train_data)
-    _, X_test, y_test = create_intraday_features(test_data)
-
-    print(f"\n  Train bullish rate: {y_train.mean():.1%}")
-    print(f"  Test bullish rate: {y_test.mean():.1%}")
-
-    # Handle any inf/nan
-    X_train = X_train.replace([np.inf, -np.inf], 0).fillna(0)
-    X_test = X_test.replace([np.inf, -np.inf], 0).fillna(0)
-
-    # Scale
-    scaler = RobustScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    # Train models
-    print("\nTraining models...")
-
+def _train_ensemble(X_train_scaled, y_train, X_test_scaled, y_test):
+    """Train 4-model ensemble and return fitted models, weights, and metrics."""
     models = {
         'xgb': XGBClassifier(
             n_estimators=300,
@@ -287,31 +250,100 @@ def train_intraday_model(ticker: str = 'SPY'):
     for name, model in models.items():
         model.fit(X_train_scaled, y_train)
 
-        # Overall accuracy
         pred = model.predict(X_test_scaled)
         acc = accuracy_score(y_test, pred)
 
-        # High confidence accuracy
         proba = model.predict_proba(X_test_scaled)[:, 1]
         high_conf_mask = (proba >= 0.65) | (proba <= 0.35)
         if high_conf_mask.sum() > 0:
             high_conf_acc = accuracy_score(y_test[high_conf_mask], pred[high_conf_mask])
-            high_conf_count = high_conf_mask.sum()
+            high_conf_count = int(high_conf_mask.sum())
         else:
-            high_conf_acc = 0
+            high_conf_acc = 0.0
             high_conf_count = 0
 
         results[name] = {
-            'accuracy': acc,
-            'high_conf_accuracy': high_conf_acc,
+            'accuracy': float(acc),
+            'high_conf_accuracy': float(high_conf_acc),
             'high_conf_count': high_conf_count
         }
-        print(f"  {name}: {acc:.1%} overall, {high_conf_acc:.1%} high-conf ({high_conf_count} samples)")
 
-    # Ensemble weights based on accuracy
     total_acc = sum(r['accuracy'] for r in results.values())
-    weights = {name: r['accuracy'] / total_acc for name, r in results.items()}
+    weights = {name: (r['accuracy'] / total_acc if total_acc > 0 else 0.25) for name, r in results.items()}
+
+    proba_all = np.zeros(len(y_test))
+    for name, model in models.items():
+        proba_all += model.predict_proba(X_test_scaled)[:, 1] * weights[name]
+    pred_all = (proba_all >= 0.5).astype(int)
+    overall_acc = float(accuracy_score(y_test, pred_all))
+
+    return models, weights, overall_acc, results
+
+
+def train_intraday_model(ticker: str = 'SPY'):
+    """Train intraday update model"""
+
+    print(f"\n{'='*70}")
+    print(f"  INTRADAY MODEL TRAINING - {ticker}")
+    print(f"{'='*70}")
+
+    # Fetch data
+    df = fetch_daily_data(ticker)
+
+    # Create session snapshots
+    print("\nCreating session snapshots...")
+    snapshots = create_session_snapshots(df)
+    print(f"  Created {len(snapshots)} training samples from {len(df)} days")
+
+    # Split by date
+    train_end = '2023-12-31'
+    test_start = '2024-01-01'
+
+    train_data = snapshots[snapshots['date'] <= train_end]
+    test_data = snapshots[snapshots['date'] >= test_start]
+
+    print(f"\n  TRAIN: {len(train_data)} samples ({train_data['date'].min().strftime('%Y-%m-%d')} to {train_data['date'].max().strftime('%Y-%m-%d')})")
+    print(f"  TEST:  {len(test_data)} samples ({test_data['date'].min().strftime('%Y-%m-%d')} to {test_data['date'].max().strftime('%Y-%m-%d')})")
+
+    # Get features + both targets
+    feature_cols, X_train, y_train_open, y_train_current = create_intraday_features(train_data)
+    _, X_test, y_test_open, y_test_current = create_intraday_features(test_data)
+
+    print(f"\n  Train bullish rate (close > open): {y_train_open.mean():.1%}")
+    print(f"  Test bullish rate (close > open): {y_test_open.mean():.1%}")
+    print(f"  Train bullish rate (close > current): {y_train_current.mean():.1%}")
+    print(f"  Test bullish rate (close > current): {y_test_current.mean():.1%}")
+
+    # Handle any inf/nan (features)
+    X_train = X_train.replace([np.inf, -np.inf], 0).fillna(0)
+    X_test = X_test.replace([np.inf, -np.inf], 0).fillna(0)
+
+    # Targets sanity
+    y_train_open = y_train_open.astype(int)
+    y_test_open = y_test_open.astype(int)
+    y_train_current = y_train_current.astype(int)
+    y_test_current = y_test_current.astype(int)
+
+    # Scale
+    scaler = RobustScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Train ensemble A (close > open)
+    print("\nTraining models (Target A: close > open)...")
+    models, weights, overall_acc, results = _train_ensemble(X_train_scaled, y_train_open, X_test_scaled, y_test_open)
+    for name, r in results.items():
+        print(f"  {name}: {r['accuracy']:.1%} overall, {r['high_conf_accuracy']:.1%} high-conf ({r['high_conf_count']} samples)")
     print(f"\n  Ensemble weights: {weights}")
+
+    # Train ensemble B (close > current)
+    print("\nTraining models (Target B: close > CURRENT price)...")
+    models_current, weights_current, overall_acc_current, results_current = _train_ensemble(
+        X_train_scaled, y_train_current, X_test_scaled, y_test_current
+    )
+    for name, r in results_current.items():
+        print(f"  {name}: {r['accuracy']:.1%} overall, {r['high_conf_accuracy']:.1%} high-conf ({r['high_conf_count']} samples)")
+    print(f"\n  Ensemble weights (current): {weights_current}")
 
     # Evaluate by time slice
     print("\n" + "="*50)
@@ -327,7 +359,7 @@ def train_intraday_model(ticker: str = 'SPY'):
             continue
 
         X_slice = X_test_scaled[mask.values]
-        y_slice = y_test[mask].values
+        y_slice = y_test_open[mask].values
 
         # Ensemble prediction
         proba = np.zeros(len(y_slice))
@@ -348,13 +380,32 @@ def train_intraday_model(ticker: str = 'SPY'):
 
         print(f"  {label:5s}: {acc:.1%} overall | {hc_acc:.1%} @ 60% conf ({hc_pct:.0%} of signals)")
 
-    # Calculate overall test metrics
-    proba_all = np.zeros(len(y_test))
-    for name, model in models.items():
-        proba_all += model.predict_proba(X_test_scaled)[:, 1] * weights[name]
+    # Evaluate "from now" target by time slice as well
+    print("\n" + "="*50)
+    print("  ACCURACY BY SESSION TIME (close > CURRENT)")
+    print("="*50)
+    for time_pct, label in zip(time_slices, time_labels):
+        mask = test_data['time_pct'] == time_pct
+        if mask.sum() == 0:
+            continue
+        X_slice = X_test_scaled[mask.values]
+        y_slice = y_test_current[mask].values
 
-    pred_all = (proba_all >= 0.5).astype(int)
-    overall_acc = accuracy_score(y_test, pred_all)
+        proba = np.zeros(len(y_slice))
+        for name, model in models_current.items():
+            proba += model.predict_proba(X_slice)[:, 1] * weights_current[name]
+        pred = (proba >= 0.5).astype(int)
+        acc = accuracy_score(y_slice, pred)
+
+        high_conf = (proba >= 0.6) | (proba <= 0.4)
+        if high_conf.sum() > 0:
+            hc_acc = accuracy_score(y_slice[high_conf], pred[high_conf])
+            hc_pct = high_conf.sum() / len(y_slice)
+        else:
+            hc_acc = 0
+            hc_pct = 0
+
+        print(f"  {label:5s}: {acc:.1%} overall | {hc_acc:.1%} @ 60% conf ({hc_pct:.0%} of signals)")
 
     # Save model
     model_data = {
@@ -363,11 +414,18 @@ def train_intraday_model(ticker: str = 'SPY'):
         'scaler': scaler,
         'feature_cols': feature_cols,
         'metrics': {
-            'accuracy': overall_acc,
+            'accuracy': float(overall_acc),
             'by_model': results
         },
+        # New: model to predict whether EOD close > CURRENT price
+        'models_current': models_current,
+        'weights_current': weights_current,
+        'metrics_current': {
+            'accuracy': float(overall_acc_current),
+            'by_model': results_current,
+        },
         'ticker': ticker,
-        'version': 'intraday_v1',
+        'version': 'intraday_v2_open_and_current',
         'trained_at': datetime.now().isoformat()
     }
 

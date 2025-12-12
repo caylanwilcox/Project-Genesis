@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 
-const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'https://genesis-production-c1e9.up.railway.app'
+// Use same-origin Next.js API routes to avoid CORS / env mismatches in the browser.
+const DAILY_SIGNALS_URL = '/api/v2/ml/daily-signals'
+const SIGNAL_BREAKDOWN_URL = '/api/v2/ml/signal-breakdown'
 
 // Daily Signals Types
 interface TickerSignal {
@@ -251,7 +253,7 @@ export function MLMorningBriefing() {
   const fetchBreakdown = async () => {
     setBreakdownLoading(true)
     try {
-      const response = await fetch(`${ML_SERVER_URL}/signal_breakdown`)
+      const response = await fetch(SIGNAL_BREAKDOWN_URL)
       if (response.ok) {
         const data = await response.json()
         setBreakdown(data)
@@ -274,10 +276,11 @@ export function MLMorningBriefing() {
     const fetchSignals = async () => {
       try {
         setLoading(true)
-        const response = await fetch(`${ML_SERVER_URL}/daily_signals`)
+        const response = await fetch(DAILY_SIGNALS_URL)
 
         if (!response.ok) {
-          throw new Error('Failed to fetch signals')
+          const text = await response.text()
+          throw new Error(text || 'Failed to fetch signals')
         }
 
         const data = await response.json()

@@ -714,19 +714,37 @@ def predict_intraday(ticker: str, df: pd.DataFrame, snapshot: dict) -> dict:
         X_scaled = scaler.transform(X)
 
         # Get ensemble prediction
-        bullish_prob = 0.0
+        # Target A: close > open
+        bullish_prob_open = 0.0
         for model_name, model in models.items():
             prob = model.predict_proba(X_scaled)[0][1]
-            bullish_prob += prob * weights.get(model_name, 0.25)
+            bullish_prob_open += prob * weights.get(model_name, 0.25)
+
+        # Target B (optional): close > CURRENT price
+        bullish_prob_current = None
+        models_current = model_data.get('models_current')
+        weights_current = model_data.get('weights_current')
+        if models_current and weights_current:
+            p = 0.0
+            for model_name, model in models_current.items():
+                prob = model.predict_proba(X_scaled)[0][1]
+                p += prob * weights_current.get(model_name, 0.25)
+            bullish_prob_current = p
+
+        # Default to "from now" probability if available
+        bullish_prob = bullish_prob_current if bullish_prob_current is not None else bullish_prob_open
 
         return {
             'probability': round(float(bullish_prob), 3),
+            'probability_close_above_open': round(float(bullish_prob_open), 3),
+            'probability_close_above_current': round(float(bullish_prob_current), 3) if bullish_prob_current is not None else None,
             'confidence': round(abs(bullish_prob - 0.5) * 2, 3),
             'time_pct': round(time_pct, 2),
             'session_label': get_session_label(time_pct),
             'current_vs_open': round(current_vs_open * 100, 2),
             'position_in_range': round(position_in_range * 100, 1),
-            'model_accuracy': round(float(model_data['metrics']['accuracy']), 3),
+            'model_accuracy': round(float(model_data.get('metrics_current', {}).get('accuracy', model_data['metrics']['accuracy'])), 3),
+            'prediction_target': 'close_above_current' if bullish_prob_current is not None else 'close_above_open',
         }
 
     except Exception as e:
@@ -1132,21 +1150,33 @@ def predict_highlow(ticker: str, df: pd.DataFrame):
     X = pd.DataFrame([features])[feature_cols]
     X_scaled = model_data['scaler'].transform(X)
 
-    # Ensemble prediction for high
-    high_models = model_data['high_models']
-    pred_high_pct = (
-        high_models['xgb'].predict(X_scaled)[0] * weights['xgb'] +
-        high_models['gb'].predict(X_scaled)[0] * weights['gb'] +
-        high_models['rf'].predict(X_scaled)[0] * weights['rf']
-    ) + buffer
+    # Predict high/low % moves.
+    # Support BOTH model formats:
+    # - New: {'high_models': {'xgb','gb','rf'}, 'low_models': {...}, 'weights': {...}}
+    # - Legacy: {'high_model': regressor, 'low_model': regressor}
+    if 'high_models' in model_data and 'low_models' in model_data:
+        high_models = model_data['high_models']
+        pred_high_pct = (
+            high_models['xgb'].predict(X_scaled)[0] * weights.get('xgb', 0.4) +
+            high_models['gb'].predict(X_scaled)[0] * weights.get('gb', 0.3) +
+            high_models['rf'].predict(X_scaled)[0] * weights.get('rf', 0.3)
+        ) + buffer
 
-    # Ensemble prediction for low
-    low_models = model_data['low_models']
-    pred_low_pct = (
-        low_models['xgb'].predict(X_scaled)[0] * weights['xgb'] +
-        low_models['gb'].predict(X_scaled)[0] * weights['gb'] +
-        low_models['rf'].predict(X_scaled)[0] * weights['rf']
-    ) + buffer
+        low_models = model_data['low_models']
+        pred_low_pct = (
+            low_models['xgb'].predict(X_scaled)[0] * weights.get('xgb', 0.4) +
+            low_models['gb'].predict(X_scaled)[0] * weights.get('gb', 0.3) +
+            low_models['rf'].predict(X_scaled)[0] * weights.get('rf', 0.3)
+        ) + buffer
+    else:
+        # Legacy single-model format
+        high_model = model_data.get('high_model')
+        low_model = model_data.get('low_model')
+        if high_model is None or low_model is None:
+            raise KeyError('high_model')
+
+        pred_high_pct = float(high_model.predict(X_scaled)[0]) + float(buffer)
+        pred_low_pct = float(low_model.predict(X_scaled)[0]) + float(buffer)
 
     # Convert to prices (from today's open)
     open_price = float(latest['Open'])
@@ -2345,17 +2375,22 @@ def regime_prediction():
             hl_model = regime_model['highlow']
             X_hl_scaled = hl_model['scaler'].transform(X)
 
-            high_pred = (
-                hl_model['high_models']['xgb'].predict(X_hl_scaled)[0] * 0.4 +
-                hl_model['high_models']['gb'].predict(X_hl_scaled)[0] * 0.3 +
-                hl_model['high_models']['rf'].predict(X_hl_scaled)[0] * 0.3
-            )
+            # Support both ensemble and legacy high/low model formats
+            if 'high_models' in hl_model and 'low_models' in hl_model:
+                high_pred = (
+                    hl_model['high_models']['xgb'].predict(X_hl_scaled)[0] * 0.4 +
+                    hl_model['high_models']['gb'].predict(X_hl_scaled)[0] * 0.3 +
+                    hl_model['high_models']['rf'].predict(X_hl_scaled)[0] * 0.3
+                )
 
-            low_pred = (
-                hl_model['low_models']['xgb'].predict(X_hl_scaled)[0] * 0.4 +
-                hl_model['low_models']['gb'].predict(X_hl_scaled)[0] * 0.3 +
-                hl_model['low_models']['rf'].predict(X_hl_scaled)[0] * 0.3
-            )
+                low_pred = (
+                    hl_model['low_models']['xgb'].predict(X_hl_scaled)[0] * 0.4 +
+                    hl_model['low_models']['gb'].predict(X_hl_scaled)[0] * 0.3 +
+                    hl_model['low_models']['rf'].predict(X_hl_scaled)[0] * 0.3
+                )
+            else:
+                high_pred = float(hl_model['high_model'].predict(X_hl_scaled)[0])
+                low_pred = float(hl_model['low_model'].predict(X_hl_scaled)[0])
 
             # Safety clip predictions to reasonable bounds (0-5% for intraday)
             high_pred = max(0.1, min(5.0, high_pred))
