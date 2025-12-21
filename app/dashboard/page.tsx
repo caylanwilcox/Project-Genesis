@@ -5,9 +5,47 @@ import { useState, useEffect, useMemo } from 'react'
 import { useMultiTickerData } from '@/hooks/useMultiTickerData'
 import { MLMorningBriefing } from '@/components/MLMorningBriefing'
 import { VolatilityMeter } from '@/components/VolatilityMeter'
+import { TradingDirections } from '@/components/TradingDirections'
+
+// ML Signals types
+interface IntradayModel {
+  probability: number
+  confidence: number
+  time_pct: number
+  session_label: string
+  current_vs_open: number
+  position_in_range: number
+  model_accuracy: number
+}
+
+interface MLTickerSignal {
+  signal: 'BUY' | 'SELL' | 'HOLD'
+  strength: 'STRONG' | 'MODERATE' | 'WEAK' | 'NEUTRAL'
+  probability: number
+  confidence: number
+  current_price: number
+  target_price: number
+  stop_loss: number
+  predicted_range: { high: number; low: number }
+  highlow_model?: {
+    predicted_high: number
+    predicted_low: number
+    high_pct: number
+    low_pct: number
+  }
+  intraday_model?: IntradayModel
+  prediction_source?: 'daily' | 'intraday'
+  model_accuracy: number
+}
+
+interface MLSignalsData {
+  tickers: Record<string, MLTickerSignal>
+  is_after_hours: boolean
+}
 
 interface TickerData {
   symbol: string
+  displaySymbol: string  // What to show (e.g., "VIX" for VIXY)
   signal: 'strong_buy' | 'buy' | 'neutral' | 'sell' | 'strong_sell'
   action: 'BUY NOW' | 'WAIT' | 'SELL NOW' | 'HOLD' | 'EXIT'
   urgency: 'IMMEDIATE' | 'SOON' | 'WATCH' | 'LOW'
@@ -34,15 +72,32 @@ interface TickerData {
   backtestedAccuracy: number
   sellPrice: number
   estimatedTimeInTrade: string
+  timeDecay: number  // Time decay factor (theta-like) - hourly decay rate
+  timeDecayLabel: 'LOW' | 'MODERATE' | 'HIGH' | 'EXTREME'
+  // ML Model fields
+  mlProbability?: number
+  mlModelAccuracy?: number
+  mlSessionLabel?: string
+  mlTimePct?: number
+  mlPredictionSource?: 'daily' | 'intraday'
 }
 
-const SYMBOLS = ['SPY', 'UVXY', 'QQQ', 'IWM']
+// Map internal symbols to display names
+const SYMBOL_DISPLAY_MAP: Record<string, string> = {
+  'VIXY': 'VIX',  // VIXY ETF tracks VIX futures
+  'SPY': 'SPY',
+  'QQQ': 'QQQ',
+  'IWM': 'IWM',
+}
+
+const SYMBOLS = ['SPY', 'VIXY', 'QQQ', 'IWM']
 
 export default function Dashboard() {
   const router = useRouter()
   const [currentTime, setCurrentTime] = useState(new Date())
   const [marketStatus, setMarketStatus] = useState<'Pre-Market' | 'Open' | 'Closed' | 'After-Hours'>('Open')
   const [timeRemaining, setTimeRemaining] = useState<Record<string, number>>({})
+  const [mlSignals, setMlSignals] = useState<MLSignalsData | null>(null)
 
   // Fetch real ticker data from Polygon.io
   // Use faster refresh when on Starter+ plan (snapshots + relaxed rate limits)
@@ -50,7 +105,27 @@ export default function Dashboard() {
   const refreshMs = planEnv === 'starter' || planEnv === 'developer' ? 5000 : 60000
   const { tickers: polygonTickers, isLoading, error } = useMultiTickerData(SYMBOLS, true, refreshMs)
 
-  // Calculate signals and metrics based on real data
+  // Fetch ML signals
+  useEffect(() => {
+    const fetchMLSignals = async () => {
+      try {
+        const response = await fetch('/api/v2/ml/daily-signals')
+        if (response.ok) {
+          const data = await response.json()
+          setMlSignals(data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch ML signals:', err)
+      }
+    }
+
+    fetchMLSignals()
+    // Refresh ML signals every minute
+    const interval = setInterval(fetchMLSignals, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Calculate signals and metrics based on real data + ML signals
   const tickers = useMemo(() => {
     const result: TickerData[] = []
 
@@ -60,6 +135,16 @@ export default function Dashboard() {
       if (!polygonData) return
 
       const { price, change, changePercent, volume, high, low, prevClose } = polygonData
+
+      // Get ML signal for this ticker (skip VIXY as ML doesn't cover it)
+      const mlSignal = mlSignals?.tickers?.[symbol]
+      const useIntraday = mlSignal?.intraday_model && mlSignal?.prediction_source === 'intraday'
+      const mlProb = useIntraday
+        ? mlSignal.intraday_model!.probability
+        : (mlSignal?.probability ?? 0.5)
+      const mlAccuracy = useIntraday
+        ? mlSignal.intraday_model!.model_accuracy
+        : (mlSignal?.model_accuracy ?? 0.5)
 
       // Calculate technical indicators (simplified)
       const priceRange = high - low
@@ -87,16 +172,12 @@ export default function Dashboard() {
       if (trend === 'Bullish') macd = changePercent > 1 ? 'Bullish Cross' : 'Bullish'
       else if (trend === 'Bearish') macd = changePercent < -1 ? 'Bearish Cross' : 'Bearish'
 
-      // Calculate confidence based on multiple factors
-      const trendStrength = Math.abs(changePercent) * 10
-      const volumeBonus = 10 // Simplified - would need historical comparison
-      let confidence = Math.round(
-        Math.min(95, Math.max(20,
-          50 + trendStrength + volumeBonus + (rsi > 50 ? 10 : -10)
-        ))
-      )
+      // Use ML probability for confidence (convert to percentage)
+      const confidence = mlSignal
+        ? Math.round(mlProb * 100)
+        : Math.round(Math.min(95, Math.max(20, 50 + Math.abs(changePercent) * 10)))
 
-      // Determine signal based on confidence and trend
+      // Derive signal from ML probability
       let signal: TickerData['signal'] = 'neutral'
       let recommendation = 'NEUTRAL'
       let action: TickerData['action'] = 'WAIT'
@@ -104,57 +185,73 @@ export default function Dashboard() {
       let timeToAction = 'MONITORING'
       let institutionalFlow: TickerData['institutionalFlow'] = 'Mixed'
       let optionFlow: TickerData['optionFlow'] = 'Neutral'
-      let techSignal = 'Range-bound Consolidation'
-      let backtestedAccuracy = 50.0
+      let techSignal = 'ML Intraday Prediction'
+      let backtestedAccuracy = mlAccuracy * 100
 
-      if (confidence > 85 && changePercent > 0) {
+      // Signal based on ML probability (will price go UP from current?)
+      if (mlProb >= 0.7) {
         signal = 'strong_buy'
         recommendation = 'STRONG BUY'
         action = 'BUY NOW'
         urgency = 'IMMEDIATE'
-        timeToAction = '< 5 MIN'
+        timeToAction = mlSignal?.intraday_model?.session_label || '< 5 MIN'
         institutionalFlow = 'Accumulation'
         optionFlow = 'Bullish'
-        techSignal = 'RSI Oversold + MACD Bullish Cross'
-        backtestedAccuracy = 85.0 + Math.random() * 10
-      } else if (confidence > 70 && changePercent > 0) {
+        techSignal = `${Math.round(mlProb * 100)}% chance price goes UP`
+      } else if (mlProb >= 0.6) {
         signal = 'buy'
         recommendation = 'BUY'
         action = 'BUY NOW'
         urgency = 'SOON'
-        timeToAction = '< 15 MIN'
+        timeToAction = mlSignal?.intraday_model?.session_label || '< 15 MIN'
         institutionalFlow = 'Accumulation'
         optionFlow = 'Bullish'
-        techSignal = 'Volume Breakout + RSI Momentum'
-        backtestedAccuracy = 75.0 + Math.random() * 10
-      } else if (confidence < 35 && changePercent < 0) {
-        signal = 'sell'
-        recommendation = 'SELL'
-        action = 'SELL NOW'
-        urgency = 'SOON'
-        timeToAction = '< 30 MIN'
-        institutionalFlow = 'Distribution'
-        optionFlow = 'Bearish'
-        techSignal = 'Resistance Rejection + Volume Decline'
-        backtestedAccuracy = 65.0 + Math.random() * 10
-      } else if (confidence < 25 && changePercent < -0.5) {
+        techSignal = `${Math.round(mlProb * 100)}% chance price goes UP`
+      } else if (mlProb >= 0.55) {
+        signal = 'buy'
+        recommendation = 'LEAN BUY'
+        action = 'WAIT'
+        urgency = 'WATCH'
+        timeToAction = 'MONITORING'
+        optionFlow = 'Bullish'
+        techSignal = `${Math.round(mlProb * 100)}% chance price goes UP`
+      } else if (mlProb <= 0.3) {
         signal = 'strong_sell'
         recommendation = 'EXIT NOW'
         action = 'EXIT'
         urgency = 'IMMEDIATE'
-        timeToAction = 'IMMEDIATELY'
+        timeToAction = mlSignal?.intraday_model?.session_label || 'IMMEDIATELY'
         institutionalFlow = 'Distribution'
         optionFlow = 'Bearish'
-        techSignal = 'Bearish Divergence + Support Break'
-        backtestedAccuracy = 70.0 + Math.random() * 15
+        techSignal = `${Math.round((1 - mlProb) * 100)}% chance price goes DOWN`
+      } else if (mlProb <= 0.4) {
+        signal = 'sell'
+        recommendation = 'SELL'
+        action = 'SELL NOW'
+        urgency = 'SOON'
+        timeToAction = mlSignal?.intraday_model?.session_label || '< 30 MIN'
+        institutionalFlow = 'Distribution'
+        optionFlow = 'Bearish'
+        techSignal = `${Math.round((1 - mlProb) * 100)}% chance price goes DOWN`
+      } else if (mlProb <= 0.45) {
+        signal = 'sell'
+        recommendation = 'LEAN SELL'
+        action = 'WAIT'
+        urgency = 'WATCH'
+        timeToAction = 'MONITORING'
+        optionFlow = 'Bearish'
+        techSignal = `${Math.round((1 - mlProb) * 100)}% chance price goes DOWN`
       }
 
-      // Calculate price levels
-      const supportLevel = price * 0.995
-      const resistanceLevel = price * 1.005
-      const exitTarget = price * 1.005
-      const stopLoss = price * 0.995
-      const sellPrice = price * 1.01
+      // Use ML predicted range for price levels if available
+      const mlHigh = mlSignal?.highlow_model?.predicted_high ?? mlSignal?.predicted_range?.high
+      const mlLow = mlSignal?.highlow_model?.predicted_low ?? mlSignal?.predicted_range?.low
+
+      const supportLevel = mlLow ?? price * 0.99
+      const resistanceLevel = mlHigh ?? price * 1.01
+      const exitTarget = mlHigh ?? price * 1.01
+      const stopLoss = mlLow ?? price * 0.99
+      const sellPrice = mlHigh ?? price * 1.01
 
       // Entry window
       const entryWindow = action === 'BUY NOW'
@@ -169,8 +266,36 @@ export default function Dashboard() {
         estimatedTimeInTrade = urgency === 'IMMEDIATE' ? '30-60 min' : '1-3 hours'
       }
 
+      // Calculate time decay factor (theta-like for options)
+      // Based on: time remaining in day + volatility + price movement
+      const now = new Date()
+      const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      const hours = etTime.getHours()
+      const minutes = etTime.getMinutes()
+
+      // Calculate time remaining in trading day (9:30 AM - 4:00 PM ET)
+      let hoursRemaining = 0
+      if (hours >= 9 && hours < 16) {
+        hoursRemaining = 16 - hours - (minutes / 60)
+        if (hours === 9 && minutes < 30) hoursRemaining = 6.5
+      }
+
+      // Time decay accelerates as end of day approaches
+      // Formula: decay = baseDecay * (1 + (1 - hoursRemaining/6.5) * volatilityMultiplier)
+      const baseDecay = volatilityPercent * 0.1  // Base hourly decay as % of price
+      const timeMultiplier = hoursRemaining > 0 ? Math.pow((6.5 - hoursRemaining) / 6.5, 1.5) : 1
+      const volatilityMultiplier = volatility === 'Extreme' ? 3 : volatility === 'High' ? 2 : volatility === 'Medium' ? 1.5 : 1
+      const timeDecay = Math.round(baseDecay * (1 + timeMultiplier) * volatilityMultiplier * 100) / 100
+
+      // Classify time decay
+      let timeDecayLabel: TickerData['timeDecayLabel'] = 'LOW'
+      if (timeDecay >= 0.5) timeDecayLabel = 'EXTREME'
+      else if (timeDecay >= 0.3) timeDecayLabel = 'HIGH'
+      else if (timeDecay >= 0.15) timeDecayLabel = 'MODERATE'
+
       result.push({
         symbol,
+        displaySymbol: SYMBOL_DISPLAY_MAP[symbol] || symbol,
         signal,
         action,
         urgency,
@@ -197,11 +322,19 @@ export default function Dashboard() {
         backtestedAccuracy: Math.round(backtestedAccuracy * 10) / 10,
         sellPrice,
         estimatedTimeInTrade,
+        timeDecay,
+        timeDecayLabel,
+        // ML Model fields
+        mlProbability: mlProb,
+        mlModelAccuracy: mlAccuracy,
+        mlSessionLabel: mlSignal?.intraday_model?.session_label,
+        mlTimePct: mlSignal?.intraday_model?.time_pct,
+        mlPredictionSource: mlSignal?.prediction_source,
       })
     })
 
     return result
-  }, [polygonTickers])
+  }, [polygonTickers, mlSignals])
 
   // Initialize countdown timers
   useEffect(() => {
@@ -397,6 +530,7 @@ export default function Dashboard() {
 
       {/* ML Morning Briefing & Volatility Meter */}
       <div className="px-2 pt-14 md:pt-12 md:px-4 space-y-2">
+        <TradingDirections />
         <VolatilityMeter />
         <MLMorningBriefing />
       </div>
@@ -420,7 +554,7 @@ export default function Dashboard() {
                     <div className="flex justify-between items-start mb-1 md:mb-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 md:gap-2 mb-1">
-                          <h2 className="text-lg md:text-2xl font-bold text-white truncate">{ticker.symbol}</h2>
+                          <h2 className="text-lg md:text-2xl font-bold text-white truncate">{ticker.displaySymbol}</h2>
                           <div className={`px-1 md:px-2 py-0.5 rounded text-[10px] md:text-xs font-bold text-white ${getActionColor(ticker.action)}`}>
                             {ticker.action}
                           </div>
@@ -468,9 +602,22 @@ export default function Dashboard() {
                           <div className="text-red-400 font-bold text-xs md:text-sm">${ticker.stopLoss.toFixed(2)}</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-gray-500 text-[10px] md:text-xs">TIME</div>
-                        <div className="text-cyan-400 font-bold text-[10px] md:text-xs">{ticker.estimatedTimeInTrade}</div>
+                      <div className="text-right space-y-1">
+                        <div>
+                          <div className="text-gray-500 text-[10px] md:text-xs">TIME</div>
+                          <div className="text-cyan-400 font-bold text-[10px] md:text-xs">{ticker.estimatedTimeInTrade}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500 text-[10px] md:text-xs">DECAY</div>
+                          <div className={`font-bold text-[10px] md:text-xs ${
+                            ticker.timeDecayLabel === 'EXTREME' ? 'text-red-400' :
+                            ticker.timeDecayLabel === 'HIGH' ? 'text-orange-400' :
+                            ticker.timeDecayLabel === 'MODERATE' ? 'text-yellow-400' :
+                            'text-green-400'
+                          }`}>
+                            {ticker.timeDecayLabel} ({ticker.timeDecay}%/hr)
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -499,10 +646,15 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Bottom Right Corner - AI Confidence */}
+                  {/* Bottom Right Corner - AI Model Accuracy */}
                   <div className="absolute bottom-2 md:bottom-3 right-2 md:right-3 text-right">
                     <div className="text-white font-bold text-sm md:text-lg">{ticker.confidence}%</div>
-                    <div className="text-gray-500 text-[10px] md:text-xs">Confidence</div>
+                    <div className="text-gray-500 text-[10px] md:text-xs">ML Probability</div>
+                    {ticker.mlModelAccuracy && (
+                      <div className="text-cyan-400 text-[10px] md:text-xs mt-0.5">
+                        {Math.round(ticker.mlModelAccuracy * 100)}% Model Accuracy
+                      </div>
+                    )}
                   </div>
 
                   {/* Desktop Hover Overlay */}

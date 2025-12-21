@@ -20,7 +20,7 @@ import pickle
 import pandas as pd
 import numpy as np
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -33,7 +33,14 @@ highlow_models = {}  # ticker -> high/low model data
 shrinking_models = {}  # ticker -> shrinking range model data
 regime_models = {}  # ticker -> volatility regime models
 intraday_models = {}  # ticker -> intraday session update models
+intraday_v6_models = {}  # ticker -> V6 time-split intraday models
+target_models = {}  # ticker -> multi-timeframe target refinement models
+enhanced_v3_models = {}  # ticker -> enhanced v3 model with 80 new features
 MODELS_DIR = os.path.join(os.path.dirname(__file__), 'models')
+
+# Model version selection (can be set via environment variable)
+# Options: 'standard', 'enhanced_v3', 'compare' (returns both)
+ACTIVE_MODEL_VERSION = os.environ.get('MODEL_VERSION', 'standard')
 
 # Volatility regime thresholds
 LOW_VOL_THRESHOLD = 0.30
@@ -159,8 +166,60 @@ def load_models():
             except Exception as e:
                 print(f"  ✗ {ticker} intraday model failed to load: {e}")
 
-    total_models = len(models) + (1 if combined_model else 0) + len(daily_models) + len(highlow_models) + len(shrinking_models) + len(intraday_models)
-    print(f"\nTotal models loaded: {total_models}")
+    # Load V6 time-split intraday models (high accuracy)
+    print("\nLoading V6 Time-Split Intraday models...")
+    for ticker in SUPPORTED_TICKERS:
+        v6_path = os.path.join(MODELS_DIR, f'{ticker.lower()}_intraday_v6.pkl')
+        if os.path.exists(v6_path):
+            try:
+                with open(v6_path, 'rb') as f:
+                    intraday_v6_models[ticker] = pickle.load(f)
+                acc_early = intraday_v6_models[ticker].get('acc_early', 0)
+                acc_late_a = intraday_v6_models[ticker].get('acc_late_a', 0)
+                acc_late_b = intraday_v6_models[ticker].get('acc_late_b', 0)
+                print(f"  ✓ {ticker} V6 model loaded")
+                print(f"      Early: {acc_early:.1%}, Late A: {acc_late_a:.1%}, Late B: {acc_late_b:.1%}")
+            except Exception as e:
+                print(f"  ✗ {ticker} V6 model failed to load: {e}")
+        else:
+            print(f"  - {ticker} V6 model not found (run train_time_split.py)")
+
+    # Load target refinement models (multi-timeframe)
+    print("\nLoading Target Refinement models...")
+    for ticker in SUPPORTED_TICKERS:
+        target_path = os.path.join(MODELS_DIR, f'{ticker.lower()}_target_model.pkl')
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, 'rb') as f:
+                    target_models[ticker] = pickle.load(f)
+                m = target_models[ticker]['metrics']
+                print(f"  ✓ {ticker} target model loaded")
+                print(f"      Both Capture Rate: {m.get('both_capture_rate', 0):.1%}")
+            except Exception as e:
+                print(f"  ✗ {ticker} target model failed to load: {e}")
+
+    # Load Enhanced v3 models (with 80 new features)
+    print("\nLoading Enhanced v3 models...")
+    for ticker in SUPPORTED_TICKERS:
+        enhanced_path = os.path.join(MODELS_DIR, f'{ticker.lower()}_enhanced_v3_model.pkl')
+        if os.path.exists(enhanced_path):
+            try:
+                with open(enhanced_path, 'rb') as f:
+                    enhanced_v3_models[ticker] = pickle.load(f)
+                m = enhanced_v3_models[ticker]['metrics']
+                print(f"  ✓ {ticker} enhanced v3 model loaded")
+                print(f"      Accuracy: {m.get('ensemble_accuracy', 0):.1%}")
+                print(f"      High Conf: {m.get('high_conf_accuracy', 0):.1%}")
+                print(f"      New Features: {len(enhanced_v3_models[ticker].get('new_features_used', []))}")
+            except Exception as e:
+                print(f"  ✗ {ticker} enhanced v3 model failed to load: {e}")
+        else:
+            print(f"  - {ticker} enhanced v3 model not found (run train_enhanced_v3_model.py)")
+
+    print(f"\nActive Model Version: {ACTIVE_MODEL_VERSION}")
+
+    total_models = len(models) + (1 if combined_model else 0) + len(daily_models) + len(highlow_models) + len(shrinking_models) + len(intraday_models) + len(target_models) + len(enhanced_v3_models)
+    print(f"Total models loaded: {total_models}")
     return total_models > 0
 
 
@@ -496,8 +555,98 @@ def list_models():
     })
 
 
-def fetch_polygon_data(ticker: str, days: int = 100) -> pd.DataFrame:
-    """Fetch historical daily data from Polygon.io"""
+@app.route('/model_compare', methods=['GET'])
+def model_compare():
+    """Compare standard vs enhanced_v3 models"""
+    comparison = {
+        'active_version': ACTIVE_MODEL_VERSION,
+        'tickers': {},
+        'summary': {
+            'enhanced_v3_available': len(enhanced_v3_models) > 0,
+            'new_features_count': 80
+        }
+    }
+
+    for ticker in SUPPORTED_TICKERS:
+        ticker_data = {
+            'standard': None,
+            'enhanced_v3': None,
+            'improvement': None
+        }
+
+        # Standard model (daily_models or models)
+        if ticker in daily_models:
+            m = daily_models[ticker]['metrics']
+            ticker_data['standard'] = {
+                'version': daily_models[ticker].get('version', 'standard'),
+                'accuracy': round(float(m.get('accuracy', 0)), 4),
+                'features': len(daily_models[ticker].get('features', []))
+            }
+        elif ticker in models:
+            m = models[ticker]['metrics']
+            ticker_data['standard'] = {
+                'version': models[ticker].get('version', 'unknown'),
+                'accuracy': round(float(m.get('accuracy', 0)), 4),
+                'features': len(models[ticker].get('feature_cols', []))
+            }
+
+        # Enhanced v3 model
+        if ticker in enhanced_v3_models:
+            m = enhanced_v3_models[ticker]['metrics']
+            ticker_data['enhanced_v3'] = {
+                'version': 'enhanced_v3',
+                'accuracy': round(float(m.get('ensemble_accuracy', 0)), 4),
+                'high_conf_accuracy': round(float(m.get('high_conf_accuracy', 0)), 4),
+                'high_conf_pct': round(float(m.get('high_conf_pct', 0)), 1),
+                'features': len(enhanced_v3_models[ticker].get('features', [])),
+                'new_features': len(enhanced_v3_models[ticker].get('new_features_used', [])),
+                'trained_at': enhanced_v3_models[ticker].get('trained_at', 'unknown')
+            }
+
+            # Calculate improvement if both exist
+            if ticker_data['standard']:
+                std_acc = ticker_data['standard']['accuracy']
+                enh_acc = ticker_data['enhanced_v3']['accuracy']
+                ticker_data['improvement'] = {
+                    'accuracy_delta': round(enh_acc - std_acc, 4),
+                    'accuracy_pct_change': round((enh_acc - std_acc) / std_acc * 100, 1) if std_acc > 0 else 0
+                }
+
+        comparison['tickers'][ticker] = ticker_data
+
+    return jsonify(comparison)
+
+
+@app.route('/set_model_version', methods=['POST'])
+def set_model_version():
+    """Set the active model version"""
+    global ACTIVE_MODEL_VERSION
+
+    data = request.get_json() or {}
+    version = data.get('version', 'standard')
+
+    if version not in ['standard', 'enhanced_v3', 'compare']:
+        return jsonify({
+            'error': f'Invalid version: {version}',
+            'valid_versions': ['standard', 'enhanced_v3', 'compare']
+        }), 400
+
+    ACTIVE_MODEL_VERSION = version
+    return jsonify({
+        'status': 'success',
+        'active_version': ACTIVE_MODEL_VERSION,
+        'message': f'Model version set to: {version}'
+    })
+
+
+def fetch_polygon_data(ticker: str, days: int = 100, ticker_type: str = 'stock') -> pd.DataFrame:
+    """Fetch historical daily data from Polygon.io
+
+    Args:
+        ticker: Stock symbol or index name
+        days: Number of days of history
+        ticker_type: 'stock' for regular stocks, 'index' for indices like VIX
+    """
     if not POLYGON_API_KEY:
         raise ValueError("POLYGON_API_KEY not set")
 
@@ -506,7 +655,10 @@ def fetch_polygon_data(ticker: str, days: int = 100) -> pd.DataFrame:
     end_date = datetime.now().strftime('%Y-%m-%d')
     start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
 
-    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{start_date}/{end_date}"
+    # For indices like VIX, use I: prefix
+    api_ticker = f"I:{ticker}" if ticker_type == 'index' else ticker
+
+    url = f"https://api.polygon.io/v2/aggs/ticker/{api_ticker}/range/1/day/{start_date}/{end_date}"
     params = {
         'adjusted': 'true',
         'sort': 'asc',
@@ -1043,6 +1195,250 @@ def calculate_daily_features(df):
     df['is_month_start'] = (df['day_of_month'] <= 3).astype(int)
     df['is_month_end'] = (df['day_of_month'] >= 27).astype(int)
 
+    # ========== TTM SQUEEZE ==========
+    # TTM Squeeze detects volatility compression (BB inside KC) and momentum direction
+    # Bollinger Bands (already calculated above): bb_upper, bb_lower
+    # Keltner Channels: 20 EMA +/- 1.5 * ATR
+    kc_middle = df['Close'].ewm(span=20).mean()
+    kc_atr = tr.rolling(20).mean()  # Using True Range calculated earlier
+    kc_upper = kc_middle + 1.5 * kc_atr
+    kc_lower = kc_middle - 1.5 * kc_atr
+
+    # Squeeze is ON when BB is inside KC (low volatility compression)
+    df['ttm_squeeze_on'] = ((df['bb_lower'] > kc_lower) & (df['bb_upper'] < kc_upper)).astype(int).shift(1)
+    df['ttm_squeeze_off'] = (1 - df['ttm_squeeze_on']).shift(1)  # Volatility expanding
+
+    # Squeeze "fires" when transitioning from squeeze ON to OFF
+    squeeze_state = ((df['bb_lower'] > kc_lower) & (df['bb_upper'] < kc_upper)).astype(int)
+    df['ttm_squeeze_fired'] = ((squeeze_state.shift(1) == 1) & (squeeze_state == 0)).astype(int).shift(1)
+
+    # Momentum oscillator (linear regression of price - midline over 20 bars)
+    midline = (df['bb_upper'] + df['bb_lower']) / 2
+    momentum_val = df['Close'] - midline
+    df['ttm_squeeze_momentum'] = momentum_val.shift(1)
+    df['ttm_squeeze_momentum_rising'] = (momentum_val > momentum_val.shift(1)).astype(int).shift(1)
+
+    # Count consecutive squeeze bars
+    squeeze_groups = (squeeze_state != squeeze_state.shift(1)).cumsum()
+    df['ttm_squeeze_bars'] = squeeze_state.groupby(squeeze_groups).cumsum().shift(1)
+
+    # ========== KDJ (9,3,3) INDICATOR ==========
+    # KDJ is an enhanced Stochastic with a J line for extreme readings
+    kdj_n = 9  # Lookback period
+    kdj_m1 = 3  # K smoothing
+    kdj_m2 = 3  # D smoothing
+
+    lowest_low_kdj = df['Low'].rolling(kdj_n).min()
+    highest_high_kdj = df['High'].rolling(kdj_n).max()
+    rsv = (df['Close'] - lowest_low_kdj) / (highest_high_kdj - lowest_low_kdj + 0.001) * 100
+
+    # K = SMA of RSV, D = SMA of K, J = 3*K - 2*D
+    df['kdj_k'] = rsv.ewm(span=kdj_m1, adjust=False).mean().shift(1)
+    df['kdj_d'] = df['kdj_k'].ewm(span=kdj_m2, adjust=False).mean()
+    df['kdj_j'] = 3 * df['kdj_k'] - 2 * df['kdj_d']  # J line for extreme readings
+
+    # Golden Cross: K crosses above D (bullish)
+    df['kdj_golden_cross'] = ((df['kdj_k'] > df['kdj_d']) & (df['kdj_k'].shift(1) <= df['kdj_d'].shift(1))).astype(int)
+    # Death Cross: K crosses below D (bearish)
+    df['kdj_death_cross'] = ((df['kdj_k'] < df['kdj_d']) & (df['kdj_k'].shift(1) >= df['kdj_d'].shift(1))).astype(int)
+
+    # J line extremes (J > 100 = overbought, J < 0 = oversold)
+    df['kdj_j_overbought'] = (df['kdj_j'] > 100).astype(int)
+    df['kdj_j_oversold'] = (df['kdj_j'] < 0).astype(int)
+    df['kdj_zone'] = np.where(df['kdj_j'] > 80, 1, np.where(df['kdj_j'] < 20, -1, 0))
+
+    # ========== VOLATILITY REGIME ==========
+    # Historical Volatility (annualized standard deviation of returns)
+    # Note: daily_return is already in % (multiplied by 100), so we annualize with sqrt(252)
+    df['hv_10'] = df['daily_return'].rolling(10).std() * np.sqrt(252)  # 10-day HV (already %)
+    df['hv_20'] = df['daily_return'].rolling(20).std() * np.sqrt(252)  # 20-day HV (already %)
+    df['hv_ratio'] = (df['hv_10'] / (df['hv_20'] + 0.001)).shift(1)  # Short/Long HV ratio
+
+    # Volatility regime classification (use 50-day instead of 252 for faster response)
+    hv_20_percentile = df['hv_20'].rolling(50, min_periods=20).rank(pct=True)  # 50-day percentile
+    df['vol_regime'] = np.where(hv_20_percentile > 0.8, 2,  # High vol regime
+                        np.where(hv_20_percentile < 0.2, 0,  # Low vol regime
+                                 1)).astype(int)  # Normal regime
+    df['vol_regime'] = df['vol_regime'].shift(1)
+
+    df['vol_percentile'] = hv_20_percentile.shift(1) * 100  # 0-100 scale
+
+    # Volatility expansion/contraction
+    df['vol_expanding'] = (df['hv_10'] > df['hv_20']).astype(int).shift(1)
+    df['vol_contracting'] = (df['hv_10'] < df['hv_20'] * 0.8).astype(int).shift(1)
+
+    # ATR-based volatility normalized
+    # Note: df['atr'] is already normalized by Close, so just multiply by 100 for %
+    df['atr_pct'] = (df['atr'] * 100).shift(1)  # ATR as % of price
+    df['atr_regime'] = np.where(df['atr_pct'] > df['atr_pct'].rolling(50).quantile(0.8), 2,
+                        np.where(df['atr_pct'] < df['atr_pct'].rolling(50).quantile(0.2), 0,
+                                 1)).astype(int)
+
+    # ========== RSI DIVERGENCE ==========
+    # Detect when price makes new extremes but RSI doesn't confirm
+    div_lookback = 20
+
+    # Price extremes
+    price_new_high = (df['Close'] == df['Close'].rolling(div_lookback).max())
+    price_new_low = (df['Close'] == df['Close'].rolling(div_lookback).min())
+
+    # RSI not confirming the move
+    rsi_not_high = df['rsi_14'] < df['rsi_14'].rolling(div_lookback).max()
+    rsi_not_low = df['rsi_14'] > df['rsi_14'].rolling(div_lookback).min()
+
+    df['rsi_bearish_div'] = (price_new_high & rsi_not_high).astype(int).shift(1)
+    df['rsi_bullish_div'] = (price_new_low & rsi_not_low).astype(int).shift(1)
+
+    # Divergence strength (how far RSI is from confirming)
+    rsi_high_gap = df['rsi_14'].rolling(div_lookback).max() - df['rsi_14']
+    rsi_low_gap = df['rsi_14'] - df['rsi_14'].rolling(div_lookback).min()
+    df['rsi_div_strength'] = np.where(price_new_high, rsi_high_gap,
+                              np.where(price_new_low, rsi_low_gap, 0)).astype(float)
+    df['rsi_div_strength'] = df['rsi_div_strength'].shift(1)
+
+    # ========== MACD DIVERGENCE ==========
+    macd_not_high = df['macd_histogram'] < df['macd_histogram'].rolling(div_lookback).max()
+    macd_not_low = df['macd_histogram'] > df['macd_histogram'].rolling(div_lookback).min()
+
+    df['macd_bearish_div'] = (price_new_high & macd_not_high).astype(int).shift(1)
+    df['macd_bullish_div'] = (price_new_low & macd_not_low).astype(int).shift(1)
+
+    # ========== OBV DIVERGENCE ==========
+    # OBV already calculated above, create running version for divergence check
+    obv_running = (np.sign(df['Close'].pct_change()) * df['Volume']).cumsum()
+    obv_not_high = obv_running < obv_running.rolling(div_lookback).max()
+    obv_not_low = obv_running > obv_running.rolling(div_lookback).min()
+
+    df['obv_bearish_div'] = (price_new_high & obv_not_high).astype(int).shift(1)
+    df['obv_bullish_div'] = (price_new_low & obv_not_low).astype(int).shift(1)
+
+    # Combined divergence scores
+    df['bullish_div_count'] = (df['rsi_bullish_div'] + df['macd_bullish_div'] + df['obv_bullish_div'])
+    df['bearish_div_count'] = (df['rsi_bearish_div'] + df['macd_bearish_div'] + df['obv_bearish_div'])
+    df['div_signal'] = df['bullish_div_count'] - df['bearish_div_count']  # Positive = bullish, Negative = bearish
+
+    # ========== BAR PATTERNS ==========
+    daily_range = df['High'] - df['Low']
+
+    # Inside bar: Range contained within previous bar
+    df['inside_bar'] = ((df['High'] < df['High'].shift(1)) &
+                        (df['Low'] > df['Low'].shift(1))).astype(int).shift(1)
+
+    # Outside bar (engulfing): Range exceeds previous bar
+    df['outside_bar'] = ((df['High'] > df['High'].shift(1)) &
+                         (df['Low'] < df['Low'].shift(1))).astype(int).shift(1)
+
+    # Narrow range bars (NR4, NR7) - volatility contraction
+    df['narrow_range_4'] = (daily_range == daily_range.rolling(4).min()).astype(int).shift(1)
+    df['narrow_range_7'] = (daily_range == daily_range.rolling(7).min()).astype(int).shift(1)
+
+    # Wide range bar - expansion/breakout
+    avg_range = daily_range.rolling(20).mean()
+    df['wide_range_bar'] = (daily_range > avg_range * 2).astype(int).shift(1)
+
+    # ========== TREND STRUCTURE ==========
+    df['higher_high'] = (df['High'] > df['High'].shift(1)).astype(int).shift(1)
+    df['lower_low'] = (df['Low'] < df['Low'].shift(1)).astype(int).shift(1)
+    df['higher_low'] = (df['Low'] > df['Low'].shift(1)).astype(int).shift(1)
+    df['lower_high'] = (df['High'] < df['High'].shift(1)).astype(int).shift(1)
+
+    # Trend structure score over 3 bars
+    bullish_structure = (df['higher_high'].rolling(3, min_periods=1).sum() +
+                         df['higher_low'].rolling(3, min_periods=1).sum())
+    bearish_structure = (df['lower_high'].rolling(3, min_periods=1).sum() +
+                         df['lower_low'].rolling(3, min_periods=1).sum())
+    df['trend_structure_3'] = (bullish_structure - bearish_structure).shift(1)
+
+    # ========== PIVOT POINTS ==========
+    # Classic floor trader pivots using previous day's data
+    df['pivot'] = (df['High'].shift(1) + df['Low'].shift(1) + df['Close'].shift(1)) / 3
+    df['pivot_r1'] = 2 * df['pivot'] - df['Low'].shift(1)
+    df['pivot_s1'] = 2 * df['pivot'] - df['High'].shift(1)
+    df['pivot_r2'] = df['pivot'] + (df['High'].shift(1) - df['Low'].shift(1))
+    df['pivot_s2'] = df['pivot'] - (df['High'].shift(1) - df['Low'].shift(1))
+
+    # Distance to pivot levels (as % of price)
+    df['dist_to_pivot'] = ((df['Close'].shift(1) - df['pivot']) / df['pivot'] * 100)
+    df['dist_to_r1'] = ((df['pivot_r1'] - df['Close'].shift(1)) / df['Close'].shift(1) * 100)
+    df['dist_to_s1'] = ((df['Close'].shift(1) - df['pivot_s1']) / df['Close'].shift(1) * 100)
+
+    # Position relative to pivot (above = 1, below = -1)
+    df['above_pivot'] = (df['Close'].shift(1) > df['pivot']).astype(int)
+
+    # ========== RANGE PATTERN FEATURES ==========
+    range_pct = (df['High'] - df['Low']) / df['Close'] * 100
+    df['avg_range_10'] = range_pct.rolling(10).mean().shift(1)
+    df['avg_range_20'] = range_pct.rolling(20).mean().shift(1)
+    df['range_vs_avg'] = (range_pct / (df['avg_range_20'] + 0.001)).shift(1)
+    df['range_expansion'] = (df['range_vs_avg'] > 1.5).astype(int)
+    df['range_contraction'] = (df['range_vs_avg'] < 0.5).astype(int)
+
+    # Range percentile rank
+    df['range_rank_20'] = range_pct.rolling(20).rank(pct=True).shift(1)
+
+    # Consecutive narrow range bars
+    narrow = (range_pct < range_pct.rolling(20).mean() * 0.7).astype(int)
+    narrow_groups = (narrow != narrow.shift()).cumsum()
+    df['consec_narrow'] = narrow.groupby(narrow_groups).cumsum().shift(1)
+
+    # Breakout potential: narrow range + above-average volume
+    df['breakout_potential'] = (
+        (df['consec_narrow'] >= 2) &
+        (df['prev_volume_ratio'] > 1.2)
+    ).astype(int)
+
+    # ========== FIBONACCI RETRACEMENTS ==========
+    # Based on 20-day swing high/low
+    swing_high_20 = df['High'].rolling(20).max()
+    swing_low_20 = df['Low'].rolling(20).min()
+    swing_range = swing_high_20 - swing_low_20
+
+    df['fib_236'] = (swing_high_20 - 0.236 * swing_range).shift(1)
+    df['fib_382'] = (swing_high_20 - 0.382 * swing_range).shift(1)
+    df['fib_500'] = (swing_high_20 - 0.500 * swing_range).shift(1)
+    df['fib_618'] = (swing_high_20 - 0.618 * swing_range).shift(1)
+
+    # Distance to key fib levels (as % of price)
+    df['dist_to_fib_382'] = (abs(df['Close'].shift(1) - df['fib_382']) / df['Close'].shift(1) * 100)
+    df['dist_to_fib_618'] = (abs(df['Close'].shift(1) - df['fib_618']) / df['Close'].shift(1) * 100)
+
+    # Near any key fib level (within 0.5%)
+    df['near_fib_level'] = (
+        (df['dist_to_fib_382'] < 0.5) |
+        (df['dist_to_fib_618'] < 0.5)
+    ).astype(int)
+
+    # ========== SWING HIGH/LOW SUPPORT/RESISTANCE ==========
+    df['swing_high_20'] = swing_high_20.shift(1)
+    df['swing_low_20'] = swing_low_20.shift(1)
+
+    # Distance to swing levels
+    df['dist_to_resistance'] = ((df['swing_high_20'] - df['Close'].shift(1)) / df['Close'].shift(1) * 100)
+    df['dist_to_support'] = ((df['Close'].shift(1) - df['swing_low_20']) / df['Close'].shift(1) * 100)
+
+    # At key levels (within 0.5%)
+    df['at_resistance'] = (df['dist_to_resistance'] < 0.5).astype(int)
+    df['at_support'] = (df['dist_to_support'] < 0.5).astype(int)
+
+    # Position in swing range (0 = at low, 1 = at high)
+    df['swing_position'] = ((df['Close'].shift(1) - df['swing_low_20']) /
+                            (swing_range.shift(1) + 0.001))
+
+    # ========== ENHANCED CALENDAR FEATURES ==========
+    # Week of month
+    df['week_of_month'] = (df.index.day - 1) // 7 + 1
+
+    # Quarter boundaries
+    df['is_quarter_end'] = ((df.index.month % 3 == 0) & (df['day_of_month'] >= 25)).astype(int)
+    df['is_quarter_start'] = ((df.index.month % 3 == 1) & (df['day_of_month'] <= 5)).astype(int)
+
+    # OPEX week (third Friday of month - approximate)
+    df['is_opex_week'] = ((df['day_of_month'] >= 15) & (df['day_of_month'] <= 21)).astype(int)
+
+    # First/Last trading day effects
+    df['is_first_5_days'] = (df['day_of_month'] <= 5).astype(int)
+    df['is_last_5_days'] = (df['day_of_month'] >= 25).astype(int)
+
     return df
 
 
@@ -1550,6 +1946,29 @@ def daily_signals():
                 target_high = round(current_price + atr, 2)
                 target_low = round(current_price - atr, 2)
 
+            # Get ATR for dynamic target extension
+            atr = float(latest['atr_14']) if not pd.isna(latest.get('atr_14', None)) else current_price * 0.01
+
+            # Dynamically extend targets if price has already moved past them
+            # For SELL signals: if price below target_low, extend target lower based on momentum
+            # For BUY signals: if price above target_high, extend target higher
+            original_target_low = target_low
+            original_target_high = target_high
+
+            if current_price <= target_low:
+                # Price has already hit/passed the low target - extend it
+                # Use remaining momentum: extend by how much we've already exceeded + buffer
+                overshoot = target_low - current_price
+                # Extend target by 50% of ATR or the overshoot amount, whichever is larger
+                extension = max(overshoot + atr * 0.3, atr * 0.5)
+                target_low = round(current_price - extension, 2)
+
+            if current_price >= target_high:
+                # Price has already hit/passed the high target - extend it
+                overshoot = current_price - target_high
+                extension = max(overshoot + atr * 0.3, atr * 0.5)
+                target_high = round(current_price + extension, 2)
+
             # Calculate risk/reward
             if signal == 'BUY':
                 entry = current_price
@@ -1647,6 +2066,12 @@ def daily_signals():
                         'model_accuracy': intraday_pred['model_accuracy'],
                     }
 
+            # Calculate remaining potential from current price to targets
+            remaining_upside = round(((target_high - current_price) / current_price) * 100, 2) if target_high > current_price else 0
+            remaining_downside = round(((current_price - target_low) / current_price) * 100, 2) if target_low < current_price else 0
+            remaining_upside_dollars = round(target_high - current_price, 2) if target_high > current_price else 0
+            remaining_downside_dollars = round(current_price - target_low, 2) if target_low < current_price else 0
+
             ticker_signal = {
                 'signal': signal,
                 'strength': strength,
@@ -1662,6 +2087,15 @@ def daily_signals():
                 'predicted_range': {
                     'high': target_high,
                     'low': target_low,
+                },
+                'remaining_potential': {
+                    'upside_pct': remaining_upside,
+                    'downside_pct': remaining_downside,
+                    'upside_dollars': remaining_upside_dollars,
+                    'downside_dollars': remaining_downside_dollars,
+                    'target_extended': bool(target_low != original_target_low or target_high != original_target_high),
+                    'original_target_low': original_target_low,
+                    'original_target_high': original_target_high,
                 },
                 'highlow_model': highlow_model_data,
                 'intraday_model': intraday_model_data,
@@ -1730,6 +2164,47 @@ def daily_signals():
         signals['best_trade'] = all_signals[0]
     else:
         signals['best_trade'] = None
+
+    # Fetch VIX data for volatility context (use VIXY ETF as proxy since VIX index requires paid plan)
+    try:
+        # Try VIXY first (VIX ETF that tracks VIX futures)
+        vix_data = fetch_polygon_data('VIXY', days=5)
+        if vix_data is not None and len(vix_data) > 0:
+            vix_latest = vix_data.iloc[-1]
+            vix_prev = vix_data.iloc[-2] if len(vix_data) > 1 else vix_latest
+            vix_current = float(vix_latest['Close'])
+            vix_change = ((vix_current - float(vix_prev['Close'])) / float(vix_prev['Close'])) * 100
+
+            # VIXY typically trades between $5-$50+ - determine volatility regime based on % change
+            if vix_change >= 10:
+                vix_regime = 'HIGH'
+                vix_emoji = '🔴'
+                vix_note = 'Extreme fear spike - expect large moves'
+            elif vix_change >= 5:
+                vix_regime = 'ELEVATED'
+                vix_emoji = '🟠'
+                vix_note = 'Above average volatility'
+            elif vix_change >= -2:
+                vix_regime = 'NORMAL'
+                vix_emoji = '🟢'
+                vix_note = 'Normal market conditions'
+            else:
+                vix_regime = 'LOW'
+                vix_emoji = '🟢'
+                vix_note = 'Low volatility - complacency'
+
+            signals['vix'] = {
+                'ticker': 'VIXY',
+                'current': round(vix_current, 2),
+                'change_pct': round(vix_change, 2),
+                'regime': vix_regime,
+                'emoji': vix_emoji,
+                'note': vix_note,
+            }
+        else:
+            signals['vix'] = None
+    except Exception as e:
+        signals['vix'] = {'error': str(e)}
 
     return jsonify(signals)
 
@@ -2431,6 +2906,578 @@ def regime_prediction():
 
         except Exception as e:
             result['tickers'][ticker] = {'error': str(e)}
+
+    return jsonify(result)
+
+
+def fetch_intraday_ranges(ticker: str):
+    """
+    Fetch multi-timeframe price ranges for today.
+
+    Returns:
+    - aftermarket: Previous day 4 PM - 8 PM H/L
+    - rolling_24h: Last 24 hours H/L
+    - premarket: 4 AM - 9:30 AM ET H/L
+    - first_30min: 9:30 AM - 10 AM H/L
+    - current_session: Today's regular session H/L so far
+    """
+    import pytz
+
+    if not POLYGON_API_KEY:
+        return None
+
+    et_tz = pytz.timezone('US/Eastern')
+    now_et = datetime.now(et_tz)
+    today_str = now_et.strftime('%Y-%m-%d')
+    yesterday = (now_et - timedelta(days=1)).strftime('%Y-%m-%d')
+
+    ranges = {
+        'ticker': ticker,
+        'timestamp': now_et.isoformat(),
+    }
+
+    try:
+        # Fetch today's minute data
+        url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/minute/{today_str}/{today_str}"
+        params = {'adjusted': 'true', 'sort': 'asc', 'limit': 50000, 'apiKey': POLYGON_API_KEY}
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        if data.get('status') == 'OK' and data.get('results'):
+            df = pd.DataFrame(data['results'])
+            df['timestamp'] = pd.to_datetime(df['t'], unit='ms', utc=True)
+            df['timestamp'] = df['timestamp'].dt.tz_convert('US/Eastern')
+            df['hour'] = df['timestamp'].dt.hour
+            df['minute'] = df['timestamp'].dt.minute
+
+            # Pre-market: 4 AM - 9:30 AM
+            premarket = df[
+                ((df['hour'] >= 4) & (df['hour'] < 9)) |
+                ((df['hour'] == 9) & (df['minute'] < 30))
+            ]
+            if len(premarket) > 0:
+                ranges['premarket'] = {
+                    'high': float(premarket['h'].max()),
+                    'low': float(premarket['l'].min()),
+                    'open': float(premarket.iloc[0]['o']),
+                    'close': float(premarket.iloc[-1]['c']),
+                    'color': '#9333ea',  # Purple
+                }
+            else:
+                ranges['premarket'] = None
+
+            # First 30 minutes: 9:30 AM - 10:00 AM
+            first_30 = df[
+                ((df['hour'] == 9) & (df['minute'] >= 30)) |
+                ((df['hour'] == 10) & (df['minute'] == 0))
+            ]
+            if len(first_30) > 0:
+                ranges['first_30min'] = {
+                    'high': float(first_30['h'].max()),
+                    'low': float(first_30['l'].min()),
+                    'range': float(first_30['h'].max() - first_30['l'].min()),
+                    'color': '#f59e0b',  # Amber
+                }
+            else:
+                ranges['first_30min'] = None
+
+            # Current session so far: 9:30 AM - now
+            session = df[
+                ((df['hour'] == 9) & (df['minute'] >= 30)) |
+                ((df['hour'] >= 10) & (df['hour'] < 16))
+            ]
+            if len(session) > 0:
+                ranges['current_session'] = {
+                    'high': float(session['h'].max()),
+                    'low': float(session['l'].min()),
+                    'open': float(session.iloc[0]['o']),
+                    'last': float(session.iloc[-1]['c']),
+                    'color': '#3b82f6',  # Blue
+                }
+            else:
+                ranges['current_session'] = None
+
+        # Fetch yesterday's data for aftermarket
+        url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/minute/{yesterday}/{yesterday}"
+        params = {'adjusted': 'true', 'sort': 'asc', 'limit': 50000, 'apiKey': POLYGON_API_KEY}
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        if data.get('status') == 'OK' and data.get('results'):
+            df = pd.DataFrame(data['results'])
+            df['timestamp'] = pd.to_datetime(df['t'], unit='ms', utc=True)
+            df['timestamp'] = df['timestamp'].dt.tz_convert('US/Eastern')
+            df['hour'] = df['timestamp'].dt.hour
+
+            # After-market: 4 PM - 8 PM
+            aftermarket = df[(df['hour'] >= 16) & (df['hour'] < 20)]
+            if len(aftermarket) > 0:
+                ranges['aftermarket'] = {
+                    'high': float(aftermarket['h'].max()),
+                    'low': float(aftermarket['l'].min()),
+                    'color': '#ef4444',  # Red
+                }
+            else:
+                ranges['aftermarket'] = None
+
+            # Yesterday's regular session for reference
+            yesterday_session = df[
+                ((df['hour'] == 9) & (df['minute'] >= 30)) |
+                ((df['hour'] >= 10) & (df['hour'] < 16))
+            ]
+            if len(yesterday_session) > 0:
+                ranges['yesterday_session'] = {
+                    'high': float(yesterday_session['h'].max()),
+                    'low': float(yesterday_session['l'].min()),
+                    'close': float(yesterday_session.iloc[-1]['c']),
+                    'color': '#6b7280',  # Gray
+                }
+
+        # Calculate 24-hour rolling H/L (combine yesterday + today)
+        if ranges.get('current_session') and ranges.get('yesterday_session'):
+            ranges['rolling_24h'] = {
+                'high': max(
+                    ranges['current_session']['high'],
+                    ranges.get('aftermarket', {}).get('high', 0),
+                    ranges.get('premarket', {}).get('high', 0),
+                    ranges['yesterday_session']['high']
+                ),
+                'low': min(
+                    ranges['current_session']['low'],
+                    ranges.get('aftermarket', {}).get('low', float('inf')),
+                    ranges.get('premarket', {}).get('low', float('inf')),
+                    ranges['yesterday_session']['low']
+                ),
+                'color': '#22c55e',  # Green
+            }
+
+    except Exception as e:
+        ranges['error'] = str(e)
+
+    return ranges
+
+
+@app.route('/price_ranges', methods=['GET'])
+def price_ranges():
+    """
+    Get multi-timeframe price ranges for all tickers.
+
+    Returns colored price ranges for:
+    - Aftermarket H/L (previous day 4 PM - 8 PM) - Red
+    - 24-hour rolling H/L - Green
+    - Pre-market H/L (4 AM - 9:30 AM) - Purple
+    - First 30 min H/L (9:30 AM - 10 AM) - Amber
+    - Current session H/L - Blue
+    """
+    if not POLYGON_API_KEY:
+        return jsonify({'error': 'POLYGON_API_KEY not configured'}), 500
+
+    result = {
+        'generated_at': datetime.now().isoformat(),
+        'tickers': {}
+    }
+
+    for ticker in SUPPORTED_TICKERS:
+        try:
+            ranges = fetch_intraday_ranges(ticker)
+            if ranges:
+                # Add ML-refined targets if model available
+                if ticker in target_models:
+                    model_data = target_models[ticker]
+                    ranges['ml_refined'] = {
+                        'available': True,
+                        'capture_rate': model_data['metrics'].get('both_capture_rate', 0),
+                    }
+                else:
+                    ranges['ml_refined'] = {'available': False}
+
+                result['tickers'][ticker] = ranges
+            else:
+                result['tickers'][ticker] = {'error': 'No data available'}
+        except Exception as e:
+            result['tickers'][ticker] = {'error': str(e)}
+
+    return jsonify(result)
+
+
+# ============================================================
+# TRADING DIRECTIONS ENDPOINT - V6 Model + EV Allocator
+# ============================================================
+
+def get_v6_prediction(ticker, hourly_bars, daily_bars, current_hour):
+    """
+    Get prediction from V6 time-split model.
+
+    Returns: (prob_a, prob_b, session) or (None, None, None) if not available
+    """
+    if ticker not in intraday_v6_models:
+        return None, None, None
+
+    model_data = intraday_v6_models[ticker]
+    feature_cols = model_data['feature_cols']
+
+    # Get today's data
+    if len(hourly_bars) < 1 or len(daily_bars) < 3:
+        return None, None, None
+
+    today_open = hourly_bars[0]['o']
+    current_close = hourly_bars[-1]['c']
+    current_high = max(b['h'] for b in hourly_bars)
+    current_low = min(b['l'] for b in hourly_bars)
+
+    # Previous days
+    prev_day = daily_bars[-2] if len(daily_bars) >= 2 else daily_bars[-1]
+    prev_prev_day = daily_bars[-3] if len(daily_bars) >= 3 else prev_day
+
+    # Get 11 AM price if available
+    price_11am = None
+    for bar in hourly_bars:
+        bar_hour = pd.Timestamp(bar['t'], unit='ms', tz='America/New_York').hour
+        if bar_hour == 11:
+            price_11am = bar['c']
+            break
+
+    # Build features
+    features = {
+        'gap': (today_open - prev_day['c']) / prev_day['c'],
+        'prev_day_return': (prev_day['c'] - prev_day['o']) / prev_day['o'],
+        'prev_day_range': (prev_day['h'] - prev_day['l']) / prev_day['o'],
+        'prev_2day_return': (prev_day['c'] - prev_prev_day['c']) / prev_prev_day['c'],
+        'current_vs_open': (current_close - today_open) / today_open,
+        'current_vs_open_direction': 1 if current_close > today_open else -1,
+        'above_open': 1 if current_close > today_open else 0,
+        'position_in_range': (current_close - current_low) / (current_high - current_low + 0.0001),
+        'near_high': 1 if current_close >= current_high * 0.995 else 0,
+        'time_pct': len(hourly_bars) / 8,
+        'first_hour_return': (hourly_bars[0]['c'] - today_open) / today_open if len(hourly_bars) >= 1 else 0,
+        'last_hour_return': (hourly_bars[-1]['c'] - hourly_bars[-2]['c']) / hourly_bars[-2]['c'] if len(hourly_bars) >= 2 else 0,
+        'bullish_bar_ratio': sum(1 for b in hourly_bars if b['c'] > b['o']) / len(hourly_bars) if hourly_bars else 0.5,
+        'prev_range': (prev_day['h'] - prev_day['l']) / prev_day['c'],
+    }
+
+    # 11 AM features
+    if price_11am is not None and current_hour >= 11:
+        features['current_vs_11am'] = (current_close - price_11am) / price_11am
+        features['above_11am'] = 1 if current_close > price_11am else 0
+    else:
+        features['current_vs_11am'] = 0
+        features['above_11am'] = 0
+
+    # Multi-day features (simplified - use last few days from daily_bars)
+    if len(daily_bars) >= 6:
+        features['return_3d'] = (daily_bars[-2]['c'] - daily_bars[-5]['c']) / daily_bars[-5]['c']
+        features['return_5d'] = (daily_bars[-2]['c'] - daily_bars[-7]['c']) / daily_bars[-7]['c']
+        returns = [(daily_bars[i]['c'] - daily_bars[i-1]['c']) / daily_bars[i-1]['c'] for i in range(-5, 0)]
+        features['volatility_5d'] = np.std(returns) if returns else 0.01
+    else:
+        features['return_3d'] = 0
+        features['return_5d'] = 0
+        features['volatility_5d'] = 0.01
+
+    # Consecutive days
+    features['consecutive_up'] = 0
+    features['consecutive_down'] = 0
+    for i in range(1, min(4, len(daily_bars))):
+        if daily_bars[-i]['c'] > daily_bars[-i]['o']:
+            features['consecutive_up'] += 1
+        else:
+            break
+    for i in range(1, min(4, len(daily_bars))):
+        if daily_bars[-i]['c'] < daily_bars[-i]['o']:
+            features['consecutive_down'] += 1
+        else:
+            break
+
+    # Create feature array
+    X = np.array([[features.get(col, 0) for col in feature_cols]])
+    X = np.nan_to_num(X, nan=0, posinf=0, neginf=0)
+
+    # Determine session and get prediction
+    if current_hour <= 11:
+        session = 'early'
+        X_scaled = model_data['scaler_early'].transform(X)
+        models = model_data['models_early']
+        weights = model_data['weights_early']
+
+        prob_a = sum(m.predict_proba(X_scaled)[0][1] * weights[name] for name, m in models.items())
+        prob_b = 0.5  # No Target B in early session
+    else:
+        session = 'late'
+        X_scaled = model_data['scaler_late'].transform(X)
+        models_a = model_data['models_late_a']
+        models_b = model_data['models_late_b']
+        weights_a = model_data['weights_late_a']
+        weights_b = model_data['weights_late_b']
+
+        prob_a = sum(m.predict_proba(X_scaled)[0][1] * weights_a[name] for name, m in models_a.items())
+        prob_b = sum(m.predict_proba(X_scaled)[0][1] * weights_b[name] for name, m in models_b.items())
+
+    return prob_a, prob_b, session
+
+
+def get_probability_bucket(prob):
+    """Classify probability into bucket"""
+    if prob >= 0.90:
+        return 'very_strong_bull'
+    elif prob >= 0.70:
+        return 'strong_bull'
+    elif prob >= 0.60:
+        return 'moderate_bull'
+    elif prob >= 0.40:
+        return 'neutral'
+    elif prob >= 0.30:
+        return 'moderate_bear'
+    elif prob >= 0.10:
+        return 'strong_bear'
+    else:
+        return 'very_strong_bear'
+
+
+def get_time_multiplier(hour):
+    """Position size multiplier by time of day"""
+    if hour < 12:
+        return 0.7
+    elif hour == 12:
+        return 1.0
+    elif hour in [13, 14]:
+        return 1.2  # Peak accuracy
+    elif hour == 15:
+        return 0.8
+    else:
+        return 0.5
+
+
+def get_signal_agreement_multiplier(prob_a, prob_b):
+    """Multiplier when Target A and Target B agree"""
+    if prob_a > 0.6 and prob_b > 0.6:
+        return 1.25
+    elif prob_a < 0.4 and prob_b < 0.4:
+        return 1.25
+    elif (prob_a > 0.6 and prob_b < 0.4) or (prob_a < 0.4 and prob_b > 0.6):
+        return 0.5
+    else:
+        return 1.0
+
+
+@app.route('/trading_directions', methods=['GET'])
+def trading_directions():
+    """
+    Get actionable trading directions for the day.
+
+    Uses V6 time-split model with EV-optimized allocator logic.
+
+    Returns:
+    - Per-ticker: action (LONG/SHORT/NO_TRADE), size, confidence, targets
+    - Best ticker recommendation
+    - Time-based guidance
+    """
+    if not POLYGON_API_KEY:
+        return jsonify({'error': 'POLYGON_API_KEY not configured'}), 500
+
+    # Get current time in ET
+    from datetime import timezone
+    import pytz
+    et_tz = pytz.timezone('America/New_York')
+    now_et = datetime.now(et_tz)
+    current_hour = now_et.hour
+    current_minute = now_et.minute
+
+    # Check market hours
+    is_open = is_market_hours()
+
+    result = {
+        'generated_at': now_et.isoformat(),
+        'current_time_et': now_et.strftime('%I:%M %p ET'),
+        'current_hour': current_hour,
+        'market_open': is_open,
+        'session': 'early' if current_hour <= 11 else 'late',
+        'time_multiplier': get_time_multiplier(current_hour),
+        'tickers': {},
+        'best_ticker': None,
+        'trading_rules': {
+            'entry': [
+                'Only trade when probability > 60% or < 40%',
+                'Size up 25% when Target A & B agree',
+                'Size up 20% during 1-3 PM (peak accuracy)',
+                'Size down 50% on compressed volatility days'
+            ],
+            'sizing': {
+                'very_strong': '100% of max position (prob >90% or <10%)',
+                'strong': '75% of max (prob 70-90% or 10-30%)',
+                'moderate': '50% of max (prob 60-70% or 30-40%)',
+                'neutral': 'NO TRADE (prob 45-55%)'
+            },
+            'exit': {
+                'stop_loss': '-0.25%',
+                'take_profit': '+0.50% (2R)',
+                'trailing': 'Start after +0.25% (1R)',
+                'time_stop': '3:50 PM ET'
+            }
+        },
+        'model_accuracy': {
+            'late_target_a': '89-92% (full year)',
+            'late_target_b': '79-82% (full year)',
+            'peak_hours': '1-3 PM (100% recent)'
+        }
+    }
+
+    if not is_open:
+        result['message'] = 'Market is closed. Predictions based on last available data.'
+
+    # Fetch data for each ticker
+    best_score = -999
+    best_ticker = None
+
+    for ticker in SUPPORTED_TICKERS:
+        try:
+            # Fetch hourly data for today
+            today = now_et.strftime('%Y-%m-%d')
+            yesterday = (now_et - timedelta(days=5)).strftime('%Y-%m-%d')
+
+            hourly_url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/hour/{today}/{today}"
+            hourly_resp = requests.get(hourly_url, params={
+                'adjusted': 'true',
+                'sort': 'asc',
+                'limit': 50000,
+                'apiKey': POLYGON_API_KEY
+            })
+            hourly_data = hourly_resp.json()
+            hourly_bars = hourly_data.get('results', [])
+
+            # Fetch daily data for context
+            daily_url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{yesterday}/{today}"
+            daily_resp = requests.get(daily_url, params={
+                'adjusted': 'true',
+                'sort': 'asc',
+                'limit': 10,
+                'apiKey': POLYGON_API_KEY
+            })
+            daily_data = daily_resp.json()
+            daily_bars = daily_data.get('results', [])
+
+            if len(hourly_bars) < 1:
+                result['tickers'][ticker] = {
+                    'error': 'No hourly data available',
+                    'action': 'NO_TRADE'
+                }
+                continue
+
+            # Get V6 prediction
+            prob_a, prob_b, session = get_v6_prediction(ticker, hourly_bars, daily_bars, current_hour)
+
+            if prob_a is None:
+                result['tickers'][ticker] = {
+                    'error': 'V6 model not available',
+                    'action': 'NO_TRADE'
+                }
+                continue
+
+            # Get current price
+            current_price = hourly_bars[-1]['c']
+            today_open = hourly_bars[0]['o']
+            today_change = (current_price - today_open) / today_open * 100
+
+            # Calculate allocation
+            bucket = get_probability_bucket(prob_a)
+
+            # Check neutral zone
+            if 0.45 <= prob_a <= 0.55:
+                action = 'NO_TRADE'
+                reason = 'Neutral probability zone (45-55%)'
+                position_pct = 0
+                confidence = 0
+            else:
+                # Determine direction
+                action = 'LONG' if prob_a > 0.5 else 'SHORT'
+                reason = f"{bucket.replace('_', ' ').title()} signal"
+
+                # Calculate position size
+                base_pct = 20  # Base 20% of capital
+                prob_factor = 0.5 + abs(prob_a - 0.5)  # 0.5 to 1.0
+                agreement = get_signal_agreement_multiplier(prob_a, prob_b)
+                time_mult = get_time_multiplier(current_hour)
+
+                # Size by bucket
+                if bucket in ['very_strong_bull', 'very_strong_bear']:
+                    size_mult = 1.0
+                elif bucket in ['strong_bull', 'strong_bear']:
+                    size_mult = 0.75
+                elif bucket in ['moderate_bull', 'moderate_bear']:
+                    size_mult = 0.5
+                else:
+                    size_mult = 0
+
+                position_pct = base_pct * prob_factor * agreement * time_mult * size_mult
+                position_pct = min(position_pct, 40)  # Cap at 40%
+                confidence = int(abs(prob_a - 0.5) * 200)
+
+            # Calculate targets
+            if action in ['LONG', 'SHORT']:
+                if action == 'LONG':
+                    stop_loss = current_price * 0.9975  # -0.25%
+                    take_profit = current_price * 1.005  # +0.50%
+                else:
+                    stop_loss = current_price * 1.0025
+                    take_profit = current_price * 0.995
+            else:
+                stop_loss = None
+                take_profit = None
+
+            # Score for best ticker selection
+            ev = abs(prob_a - 0.5) * (1 if action != 'NO_TRADE' else 0)
+            score = ev * get_signal_agreement_multiplier(prob_a, prob_b) * get_time_multiplier(current_hour)
+
+            if score > best_score and action != 'NO_TRADE':
+                best_score = score
+                best_ticker = ticker
+
+            result['tickers'][ticker] = {
+                'action': action,
+                'reason': reason,
+                'probability_a': round(prob_a, 3),
+                'probability_b': round(prob_b, 3),
+                'bucket': bucket,
+                'position_pct': round(position_pct, 1),
+                'confidence': confidence,
+                'current_price': round(current_price, 2),
+                'today_open': round(today_open, 2),
+                'today_change_pct': round(today_change, 2),
+                'stop_loss': round(stop_loss, 2) if stop_loss else None,
+                'take_profit': round(take_profit, 2) if take_profit else None,
+                'session': session,
+                'multipliers': {
+                    'time': get_time_multiplier(current_hour),
+                    'agreement': get_signal_agreement_multiplier(prob_a, prob_b)
+                },
+                'model_accuracy': {
+                    'early': round(intraday_v6_models[ticker].get('acc_early', 0), 3),
+                    'late_a': round(intraday_v6_models[ticker].get('acc_late_a', 0), 3),
+                    'late_b': round(intraday_v6_models[ticker].get('acc_late_b', 0), 3)
+                }
+            }
+
+        except Exception as e:
+            result['tickers'][ticker] = {
+                'error': str(e),
+                'action': 'NO_TRADE'
+            }
+
+    result['best_ticker'] = best_ticker
+
+    # Add summary guidance
+    actionable = [t for t, d in result['tickers'].items() if d.get('action') in ['LONG', 'SHORT']]
+    if actionable:
+        result['summary'] = {
+            'actionable_tickers': actionable,
+            'best_opportunity': best_ticker,
+            'recommendation': f"Focus on {best_ticker}" if best_ticker else "No clear opportunity"
+        }
+    else:
+        result['summary'] = {
+            'actionable_tickers': [],
+            'best_opportunity': None,
+            'recommendation': 'No trades meet criteria. Wait for clearer signals.'
+        }
 
     return jsonify(result)
 
