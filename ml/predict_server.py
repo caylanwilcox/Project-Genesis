@@ -3378,22 +3378,26 @@ def trading_directions():
             today_change = (current_price - today_open) / today_open * 100
 
             # Calculate allocation
-            bucket = get_probability_bucket(prob_a)
+            # In late session, use prob_b (Close > 11 AM) for action direction
+            # In early session, use prob_a (Close > Open)
+            action_prob = prob_b if session == 'late' else prob_a
+            bucket = get_probability_bucket(action_prob)
 
             # Check neutral zone
-            if 0.45 <= prob_a <= 0.55:
+            if 0.45 <= action_prob <= 0.55:
                 action = 'NO_TRADE'
                 reason = 'Neutral probability zone (45-55%)'
                 position_pct = 0
                 confidence = 0
             else:
-                # Determine direction
-                action = 'LONG' if prob_a > 0.5 else 'SHORT'
-                reason = f"{bucket.replace('_', ' ').title()} signal"
+                # Determine direction based on session-appropriate probability
+                action = 'LONG' if action_prob > 0.5 else 'SHORT'
+                target_label = 'Target B (vs 11AM)' if session == 'late' else 'Target A (vs Open)'
+                reason = f"{bucket.replace('_', ' ').title()} - {target_label}"
 
-                # Calculate position size
+                # Calculate position size based on action_prob (session-appropriate)
                 base_pct = 20  # Base 20% of capital
-                prob_factor = 0.5 + abs(prob_a - 0.5)  # 0.5 to 1.0
+                prob_factor = 0.5 + abs(action_prob - 0.5)  # 0.5 to 1.0
                 agreement = get_signal_agreement_multiplier(prob_a, prob_b)
                 time_mult = get_time_multiplier(current_hour)
 
@@ -3409,7 +3413,7 @@ def trading_directions():
 
                 position_pct = base_pct * prob_factor * agreement * time_mult * size_mult
                 position_pct = min(position_pct, 40)  # Cap at 40%
-                confidence = int(abs(prob_a - 0.5) * 200)
+                confidence = int(abs(action_prob - 0.5) * 200)
 
             # Calculate targets
             if action in ['LONG', 'SHORT']:
@@ -3423,8 +3427,8 @@ def trading_directions():
                 stop_loss = None
                 take_profit = None
 
-            # Score for best ticker selection
-            ev = abs(prob_a - 0.5) * (1 if action != 'NO_TRADE' else 0)
+            # Score for best ticker selection (use action_prob for consistency)
+            ev = abs(action_prob - 0.5) * (1 if action != 'NO_TRADE' else 0)
             score = ev * get_signal_agreement_multiplier(prob_a, prob_b) * get_time_multiplier(current_hour)
 
             if score > best_score and action != 'NO_TRADE':
