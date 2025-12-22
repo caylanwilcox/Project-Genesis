@@ -36,7 +36,7 @@ interface TradingData {
   }
 }
 
-const SYMBOLS = ['SPY', 'QQQ', 'IWM']
+const SYMBOLS = ['SPY', 'QQQ', 'IWM', 'VIX']
 
 export default function Dashboard() {
   const router = useRouter()
@@ -217,7 +217,7 @@ export default function Dashboard() {
       )}
 
       {/* Ticker Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {tickers.map(ticker => (
           <div
             key={ticker.symbol}
@@ -243,23 +243,45 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Probability */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-gray-500 text-sm">Probability</span>
-                <span className={`text-2xl font-bold ${getProbabilityColor(ticker.probability, ticker.action)}`}>
-                  {Math.round(ticker.probability * 100)}%
-                </span>
+            {/* Probabilities - Target A & B */}
+            <div className="mb-4 space-y-2">
+              {/* Target A: Close > Open */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-500 text-xs">Target A <span className="text-gray-600">(Close &gt; Open)</span></span>
+                  <span className={`text-xl font-bold ${getProbabilityColor(ticker.probability, ticker.action)}`}>
+                    {Math.round(ticker.probability * 100)}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${
+                      ticker.probability >= 0.5 ? 'bg-green-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${ticker.probability * 100}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all ${
-                    ticker.action === 'LONG' ? 'bg-green-500' :
-                    ticker.action === 'SHORT' ? 'bg-red-500' : 'bg-gray-600'
-                  }`}
-                  style={{ width: `${ticker.probability * 100}%` }}
-                />
-              </div>
+
+              {/* Target B: Close > 11 AM (only in late session) */}
+              {ticker.session === 'late' && (
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-gray-500 text-xs">Target B <span className="text-gray-600">(Close &gt; 11AM)</span></span>
+                    <span className={`text-lg font-bold ${getProbabilityColor(ticker.probabilityB, ticker.action)}`}>
+                      {Math.round(ticker.probabilityB * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${
+                        ticker.probabilityB >= 0.5 ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${ticker.probabilityB * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action Details */}
