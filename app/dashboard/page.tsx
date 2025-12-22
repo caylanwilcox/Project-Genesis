@@ -38,7 +38,7 @@ interface TradingData {
 
 const SYMBOLS = ['SPY', 'QQQ', 'IWM', 'UVXY']
 
-// Countdown component for Target B (activates at 12 PM ET)
+// Countdown component for Target B (activates at 11 AM ET)
 function TargetBCountdown() {
   const [timeLeft, setTimeLeft] = useState('')
 
@@ -50,14 +50,14 @@ function TargetBCountdown() {
       const minutes = etTime.getMinutes()
       const seconds = etTime.getSeconds()
 
-      // Target B activates at 12:00 PM ET
-      if (hours >= 12) {
+      // Target B activates at 11:00 AM ET
+      if (hours >= 11) {
         setTimeLeft('Active')
         return
       }
 
-      // Calculate time until 12 PM
-      const targetHour = 12
+      // Calculate time until 11 AM
+      const targetHour = 11
       const hoursLeft = targetHour - hours - 1
       const minutesLeft = 59 - minutes
       const secondsLeft = 60 - seconds
@@ -76,7 +76,7 @@ function TargetBCountdown() {
 
   return (
     <div className="flex justify-between items-center">
-      <span className="text-gray-500 text-xs">Target B <span className="text-gray-600">(12 PM ET)</span></span>
+      <span className="text-gray-500 text-xs">Target B <span className="text-gray-600">(11 AM ET)</span></span>
       <span className="text-yellow-400 text-sm font-mono">{timeLeft}</span>
     </div>
   )
