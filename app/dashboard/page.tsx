@@ -36,7 +36,51 @@ interface TradingData {
   }
 }
 
-const SYMBOLS = ['SPY', 'QQQ', 'IWM', 'VIX']
+const SYMBOLS = ['SPY', 'QQQ', 'IWM', 'UVXY']
+
+// Countdown component for Target B (activates at 12 PM ET)
+function TargetBCountdown() {
+  const [timeLeft, setTimeLeft] = useState('')
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date()
+      const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      const hours = etTime.getHours()
+      const minutes = etTime.getMinutes()
+      const seconds = etTime.getSeconds()
+
+      // Target B activates at 12:00 PM ET
+      if (hours >= 12) {
+        setTimeLeft('Active')
+        return
+      }
+
+      // Calculate time until 12 PM
+      const targetHour = 12
+      const hoursLeft = targetHour - hours - 1
+      const minutesLeft = 59 - minutes
+      const secondsLeft = 60 - seconds
+
+      if (hoursLeft > 0) {
+        setTimeLeft(`${hoursLeft}h ${minutesLeft}m`)
+      } else {
+        setTimeLeft(`${minutesLeft}m ${secondsLeft}s`)
+      }
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="flex justify-between items-center">
+      <span className="text-gray-500 text-xs">Target B <span className="text-gray-600">(12 PM ET)</span></span>
+      <span className="text-yellow-400 text-sm font-mono">{timeLeft}</span>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const router = useRouter()
@@ -263,8 +307,8 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Target B: Close > 11 AM (only in late session) */}
-              {ticker.session === 'late' && (
+              {/* Target B: Close > 11 AM (or countdown if early) */}
+              {ticker.session === 'late' ? (
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-gray-500 text-xs">Target B <span className="text-gray-600">(Close &gt; 11AM)</span></span>
@@ -281,6 +325,8 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
+              ) : (
+                <TargetBCountdown />
               )}
             </div>
 
