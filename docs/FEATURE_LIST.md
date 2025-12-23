@@ -6,6 +6,25 @@
 
 ---
 
+## Important Note on Technical Indicators
+
+The V6 model uses **price-based features only** - it does NOT currently use traditional technical indicators like:
+- RSI (Relative Strength Index)
+- MACD (Moving Average Convergence Divergence)
+- Bollinger Bands
+- SMA/EMA (Moving Averages)
+- ATR (Average True Range)
+- VWAP (Volume Weighted Average Price)
+
+These indicators exist in older training scripts but were **not included** in the V6 model because:
+1. The price-based features alone achieved 75-80% accuracy at high confidence
+2. Adding indicators increased model complexity without significant accuracy gains
+3. Simpler models are less prone to overfitting
+
+**Future Enhancement:** Technical indicators may be added in V7 if they improve out-of-sample accuracy.
+
+---
+
 ## Feature Categories
 
 | Category | Count | Features |
@@ -236,3 +255,57 @@ from sklearn.preprocessing import RobustScaler
 scaler = RobustScaler()
 X_scaled = scaler.fit_transform(X)
 ```
+
+---
+
+## Technical Indicators (Not Currently Used)
+
+The following technical indicators are available in the codebase but **NOT used in V6**. They may be added in future versions if they improve accuracy:
+
+### RSI (Relative Strength Index)
+- **Purpose:** Measures momentum, identifies overbought/oversold
+- **Calculation:** `RSI = 100 - (100 / (1 + RS))` where RS = avg gain / avg loss over 14 periods
+- **Typical Use:** RSI > 70 = overbought, RSI < 30 = oversold
+
+### MACD (Moving Average Convergence Divergence)
+- **Purpose:** Trend following momentum indicator
+- **Components:**
+  - MACD Line: 12-period EMA - 26-period EMA
+  - Signal Line: 9-period EMA of MACD Line
+  - Histogram: MACD Line - Signal Line
+- **Typical Use:** Bullish when MACD crosses above signal
+
+### Bollinger Bands
+- **Purpose:** Volatility bands around price
+- **Calculation:**
+  - Middle: 20-period SMA
+  - Upper: Middle + (2 × 20-period StdDev)
+  - Lower: Middle - (2 × 20-period StdDev)
+- **Typical Use:** Price at upper band = potential resistance
+
+### ATR (Average True Range)
+- **Purpose:** Measures volatility
+- **Calculation:** 14-period average of True Range
+- **True Range:** max(High-Low, |High-PrevClose|, |Low-PrevClose|)
+- **Typical Use:** Position sizing, stop loss placement
+
+### Moving Averages (SMA/EMA)
+- **Purpose:** Trend identification, support/resistance
+- **Common Periods:** 5, 9, 20, 50, 200
+- **Typical Use:** Price > SMA = bullish trend
+
+### VWAP (Volume Weighted Average Price)
+- **Purpose:** Intraday fair value benchmark
+- **Calculation:** Cumulative (Price × Volume) / Cumulative Volume
+- **Typical Use:** Price > VWAP = bullish intraday
+
+---
+
+## Why V6 Doesn't Use These Indicators
+
+1. **Simplicity:** 29 price-based features achieve 75-80% accuracy
+2. **Overfitting Risk:** More features can lead to overfitting on training data
+3. **Computational Speed:** Fewer features = faster predictions
+4. **Out-of-Sample Performance:** Price features generalized better to 2025 data
+
+If V7 testing shows indicators improve accuracy significantly (>3% improvement), they will be added.
