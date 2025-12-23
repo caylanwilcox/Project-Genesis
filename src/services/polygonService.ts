@@ -211,12 +211,18 @@ class PolygonService {
         // Simplified logging
         console.log(`[🔍 FETCH] ${ticker} ${timeframe} (${displayTimeframe}): ${fromDateStr} to ${toDateStr}, limit=${limit}`);
 
+        // Fetch with pagination support - Polygon API may return partial results with next_url
+        let allResults: any[] = [];
+        let nextUrl: string | null = null;
+        let pageCount = 0;
+        const maxPages = 10; // Safety limit to prevent infinite loops
+
+        // First request
         const response = await this.makeRequestWithRetry(async () => {
-          // Using the Polygon.io REST client
           const result = await this.client.getStocksAggregates(
             ticker,
             config.multiplier,
-            config.timespan as any, // Polygon client uses enum, we use string
+            config.timespan as any,
             fromDateStr,
             toDateStr,
             true, // adjusted
@@ -226,14 +232,46 @@ class PolygonService {
           return result;
         });
 
+        if (response && Array.isArray(response.results)) {
+          allResults = [...response.results];
+          nextUrl = (response as any).next_url || null;
+          pageCount++;
+        }
+
+        // Follow pagination if there's more data
+        while (nextUrl && pageCount < maxPages) {
+          console.log(`[📄 PAGE ${pageCount + 1}] Fetching additional data...`);
+          try {
+            const apiKey = process.env.NEXT_PUBLIC_POLYGON_API_KEY || '';
+            const paginatedUrl = nextUrl.includes('apiKey=') ? nextUrl : `${nextUrl}&apiKey=${apiKey}`;
+
+            const pageResponse = await this.makeRequestWithRetry(async () => {
+              const res = await fetch(paginatedUrl);
+              if (!res.ok) throw new Error(`Pagination request failed: ${res.status}`);
+              return res.json();
+            });
+
+            if (pageResponse && Array.isArray(pageResponse.results) && pageResponse.results.length > 0) {
+              allResults = [...allResults, ...pageResponse.results];
+              nextUrl = pageResponse.next_url || null;
+              pageCount++;
+            } else {
+              break;
+            }
+          } catch (pageError) {
+            console.warn('[⚠️ PAGINATION] Failed to fetch next page:', pageError);
+            break;
+          }
+        }
+
         // Trust presence of results over status (Polygon may return status 'DELAYED')
-        if (response && Array.isArray(response.results) && response.results.length > 0) {
-          const normalized = this.normalizeAggregates(response.results);
+        if (allResults.length > 0) {
+          const normalized = this.normalizeAggregates(allResults);
           const firstBar = normalized[0];
           const lastBar = normalized[normalized.length - 1];
           const firstDate = new Date(firstBar.time).toLocaleDateString();
           const lastDate = new Date(lastBar.time).toLocaleDateString();
-          console.log(`[✅ DATA] Got ${normalized.length} bars: ${firstDate} → ${lastDate}`);
+          console.log(`[✅ DATA] Got ${normalized.length} bars (${pageCount} page${pageCount > 1 ? 's' : ''}): ${firstDate} → ${lastDate}`);
           return normalized;
         }
 
@@ -308,37 +346,42 @@ class PolygonService {
   }
 
   /**
-   * Get intraday data for today
+   * Get intraday data for today (uses Eastern Time for correct trading day)
    */
   async getIntradayData(
     ticker: string,
     interval: '1' | '5' | '15' | '30' = '5'
   ): Promise<NormalizedChartData[]> {
-    try {
-      const today = new Date();
-      const startOfDay = new Date(today);
-      startOfDay.setHours(0, 0, 0, 0);
+    // Use Eastern Time to determine "today" for the market
+    const now = new Date();
+    const etDateStr = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const cacheKey = `intraday_${ticker}_${interval}_${etDateStr}`;
 
-      const response = await this.client.getStocksAggregates(
-        ticker,
-        parseInt(interval),
-        'minute' as any,
-        this.formatDate(startOfDay),
-        this.formatDate(today),
-        true, // adjusted
-        'asc' as any, // sort
-        50000 // limit
-      );
+    return this.queueRequest(cacheKey, async () => {
+      try {
+        const response = await this.makeRequestWithRetry(async () => {
+          return await this.client.getStocksAggregates(
+            ticker,
+            parseInt(interval),
+            'minute' as any,
+            etDateStr,
+            etDateStr,
+            true, // adjusted
+            'asc' as any, // sort
+            50000 // limit
+          );
+        });
 
-      if (response.status === 'OK' && response.results) {
-        return this.normalizeAggregates(response.results);
+        if (response.status === 'OK' && response.results) {
+          return this.normalizeAggregates(response.results);
+        }
+
+        return [];
+      } catch (error) {
+        console.error('Error fetching intraday data from Polygon.io:', error);
+        throw error;
       }
-
-      return [];
-    } catch (error) {
-      console.error('Error fetching intraday data from Polygon.io:', error);
-      throw error;
-    }
+    });
   }
 
   /**
@@ -540,7 +583,7 @@ class PolygonService {
   }
 
   /** Plan helpers */
-  getPlan(): 'free' | 'starter' | 'developer' {
+  getPlan(): 'free' | 'starter' | 'developer' | 'advanced' {
     return this.plan;
   }
   isPaid(): boolean {
@@ -548,15 +591,22 @@ class PolygonService {
   }
 
   /**
-   * Roll any provided date back to the most recent weekday (Mon-Fri)
+   * Get the current date in Eastern Time and roll back to most recent weekday (Mon-Fri)
    * so that aggregate queries always anchor on an actual trading session.
+   * Uses Eastern Time since US markets operate in ET.
    */
   private getLastTradingDate(date: Date): Date {
-    const adjusted = new Date(date.getTime());
+    // Get current date in Eastern Time
+    const etDateStr = date.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const [year, month, day] = etDateStr.split('-').map(Number);
+
+    // Create a new date object representing the ET date at noon (to avoid DST issues)
+    const adjusted = new Date(year, month - 1, day, 12, 0, 0, 0);
+
     let safety = 7; // prevent infinite loops in extreme scenarios
     while (safety > 0) {
-      const day = adjusted.getDay();
-      if (day !== 0 && day !== 6) {
+      const dayOfWeek = adjusted.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
         return adjusted;
       }
       adjusted.setDate(adjusted.getDate() - 1);

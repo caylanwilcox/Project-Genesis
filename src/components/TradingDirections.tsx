@@ -140,6 +140,27 @@ export function TradingDirections() {
     return `${Math.round(prob * 100)}%`
   }
 
+  // Defensive normalization: the ML server can return partial/older shapes.
+  const safeTickers = (data.tickers ?? {}) as Record<string, Partial<TickerDirection>>
+  const safeSummary = data.summary ?? {
+    actionable_tickers: [],
+    best_opportunity: null,
+    recommendation: '',
+  }
+  const safeRules = data.trading_rules ?? { entry: [], sizing: {}, exit: {} }
+
+  const getModelAccuracyPct = (direction: Partial<TickerDirection>): number | null => {
+    const early = direction.model_accuracy?.early
+    const lateA = direction.model_accuracy?.late_a
+    const chosen = direction.session === 'late' ? lateA : early
+    return typeof chosen === 'number' && Number.isFinite(chosen) ? Math.round(chosen * 100) : null
+  }
+
+  const formatMoney = (value: number | null | undefined) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+    return `$${value.toFixed(2)}`
+  }
+
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
       {/* Header */}
@@ -181,13 +202,13 @@ export function TradingDirections() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <div className="text-gray-400 font-medium mb-1">Entry Rules</div>
-              {data.trading_rules.entry.map((rule, i) => (
+              {safeRules.entry.map((rule, i) => (
                 <div key={i} className="text-gray-500">{rule}</div>
               ))}
             </div>
             <div>
               <div className="text-gray-400 font-medium mb-1">Position Sizing</div>
-              {Object.entries(data.trading_rules.sizing).map(([key, value]) => (
+              {Object.entries(safeRules.sizing).map(([key, value]) => (
                 <div key={key} className="text-gray-500">
                   <span className="text-gray-400">{key}:</span> {value}
                 </div>
@@ -195,7 +216,7 @@ export function TradingDirections() {
             </div>
             <div>
               <div className="text-gray-400 font-medium mb-1">Exit Rules</div>
-              {Object.entries(data.trading_rules.exit).map(([key, value]) => (
+              {Object.entries(safeRules.exit).map(([key, value]) => (
                 <div key={key} className="text-gray-500">
                   <span className="text-gray-400">{key}:</span> {value}
                 </div>
@@ -208,18 +229,18 @@ export function TradingDirections() {
       {/* Summary Banner */}
       <div className="px-4 py-2 bg-gray-800/30 border-b border-gray-800">
         <div className="text-sm text-gray-300">
-          {data.summary.recommendation}
+          {safeSummary.recommendation}
         </div>
-        {data.summary.actionable_tickers.length > 0 && (
+        {safeSummary.actionable_tickers.length > 0 && (
           <div className="text-xs text-gray-500 mt-0.5">
-            Actionable: {data.summary.actionable_tickers.join(', ')}
+            Actionable: {safeSummary.actionable_tickers.join(', ')}
           </div>
         )}
       </div>
 
       {/* Ticker Cards */}
       <div className="p-4 space-y-3">
-        {Object.entries(data.tickers).map(([ticker, direction]) => (
+        {Object.entries(safeTickers).map(([ticker, direction]) => (
           <div
             key={ticker}
             className={`border rounded-lg p-3 ${getActionBorderColor(direction.action)} ${
@@ -239,7 +260,9 @@ export function TradingDirections() {
                       <span className="text-cyan-400 text-xs">BEST</span>
                     )}
                   </div>
-                  <div className="text-gray-400 text-xs mt-0.5">{direction.reason}</div>
+                  <div className="text-gray-400 text-xs mt-0.5">
+                    {direction.error ? direction.error : (direction.reason || '—')}
+                  </div>
                 </div>
               </div>
 
@@ -251,7 +274,7 @@ export function TradingDirections() {
                     direction.probability_a > 0.6 ? 'text-green-400' :
                     direction.probability_a < 0.4 ? 'text-red-400' : 'text-gray-400'
                   }`}>
-                    {formatProbability(direction.probability_a)}
+                    {typeof direction.probability_a === 'number' ? formatProbability(direction.probability_a) : '—'}
                   </span>
                 </div>
                 {direction.session === 'late' && (
@@ -261,7 +284,7 @@ export function TradingDirections() {
                       direction.probability_b > 0.6 ? 'text-green-400' :
                       direction.probability_b < 0.4 ? 'text-red-400' : 'text-gray-400'
                     }`}>
-                      {formatProbability(direction.probability_b)}
+                      {typeof direction.probability_b === 'number' ? formatProbability(direction.probability_b) : '—'}
                     </span>
                   </div>
                 )}
@@ -273,24 +296,26 @@ export function TradingDirections() {
               <div className="mt-3 pt-3 border-t border-gray-800 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <div className="text-gray-500">Position Size</div>
-                  <div className="text-white font-bold">{direction.position_pct}%</div>
+                  <div className="text-white font-bold">
+                    {typeof direction.position_pct === 'number' ? `${direction.position_pct}%` : '—'}
+                  </div>
                 </div>
                 <div>
                   <div className="text-gray-500">Confidence</div>
                   <div className={`font-bold ${getBucketColor(direction.bucket)}`}>
-                    {direction.confidence}%
+                    {typeof direction.confidence === 'number' ? `${direction.confidence}%` : '—'}
                   </div>
                 </div>
                 <div>
                   <div className="text-gray-500">Stop Loss</div>
                   <div className="text-red-400 font-mono">
-                    ${direction.stop_loss?.toFixed(2)}
+                    {formatMoney(direction.stop_loss)}
                   </div>
                 </div>
                 <div>
                   <div className="text-gray-500">Take Profit</div>
                   <div className="text-green-400 font-mono">
-                    ${direction.take_profit?.toFixed(2)}
+                    {formatMoney(direction.take_profit)}
                   </div>
                 </div>
               </div>
@@ -299,13 +324,18 @@ export function TradingDirections() {
             {/* Price Info */}
             <div className="mt-2 flex justify-between text-xs text-gray-500">
               <span>
-                Current: ${direction.current_price?.toFixed(2)}
-                <span className={direction.today_change_pct >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {' '}({direction.today_change_pct >= 0 ? '+' : ''}{direction.today_change_pct?.toFixed(2)}%)
-                </span>
+                Current: {formatMoney(direction.current_price)}
+                {typeof direction.today_change_pct === 'number' && Number.isFinite(direction.today_change_pct) && (
+                  <span className={direction.today_change_pct >= 0 ? 'text-green-400' : 'text-red-400'}>
+                    {' '}({direction.today_change_pct >= 0 ? '+' : ''}{direction.today_change_pct.toFixed(2)}%)
+                  </span>
+                )}
               </span>
               <span>
-                Model: {Math.round((direction.session === 'late' ? direction.model_accuracy.late_a : direction.model_accuracy.early) * 100)}% acc
+                Model: {(() => {
+                  const pct = getModelAccuracyPct(direction)
+                  return pct === null ? '—' : `${pct}% acc`
+                })()}
               </span>
             </div>
           </div>

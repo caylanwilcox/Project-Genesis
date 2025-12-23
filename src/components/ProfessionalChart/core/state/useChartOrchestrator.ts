@@ -36,9 +36,10 @@ export function useChartOrchestrator(props: ProfessionalChartProps) {
   const chartData = useMemo(() => {
     let processedData = data.length > 0 ? data : generateMockData(currentPrice)
 
-    // Filter out premarket/after-hours for intraday timeframes
-    const isIntraday = ['1m', '5m', '15m', '30m', '1h'].includes(dataTimeframeForFilter)
-    if (isIntraday) {
+    // Filter out premarket/after-hours for minute-level intraday timeframes only
+    // Don't filter 1h+ bars as they span multiple hours and the simple filter removes valid data
+    const shouldFilter = ['1m', '5m', '15m', '30m'].includes(dataTimeframeForFilter)
+    if (shouldFilter) {
       processedData = filterMarketHoursData(processedData)
     }
 

@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 const ML_SERVER_URL =
   process.env.ML_SERVER_URL ||
   process.env.NEXT_PUBLIC_ML_SERVER_URL ||
-  'http://localhost:5001'
+  'https://genesis-production-c1e9.up.railway.app'
 
 export async function GET() {
   try {
@@ -47,4 +47,7 @@ export async function GET() {
     )
   }
 }
+
+
+
 

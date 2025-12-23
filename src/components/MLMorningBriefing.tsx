@@ -1,12 +1,26 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { PriceRanges } from './PriceRanges'
 
 // Use same-origin Next.js API routes to avoid CORS / env mismatches in the browser.
 const DAILY_SIGNALS_URL = '/api/v2/ml/daily-signals'
 const SIGNAL_BREAKDOWN_URL = '/api/v2/ml/signal-breakdown'
 
 // Daily Signals Types
+interface IntradayModel {
+  probability: number
+  probability_close_above_current: number | null
+  probability_close_above_open: number | null
+  confidence: number
+  time_pct: number
+  session_label: string
+  current_vs_open: number
+  position_in_range: number
+  model_accuracy: number
+  prediction_target: string
+}
+
 interface TickerSignal {
   signal: 'BUY' | 'SELL' | 'HOLD'
   strength: 'STRONG' | 'MODERATE' | 'WEAK' | 'NEUTRAL'
@@ -23,6 +37,15 @@ interface TickerSignal {
     high: number
     low: number
   }
+  remaining_potential?: {
+    upside_pct: number
+    downside_pct: number
+    upside_dollars: number
+    downside_dollars: number
+    target_extended: boolean
+    original_target_low: number
+    original_target_high: number
+  }
   highlow_model?: {
     predicted_high: number
     predicted_low: number
@@ -30,7 +53,18 @@ interface TickerSignal {
     low_pct: number
     capture_rate: number
   }
+  intraday_model?: IntradayModel
+  prediction_source?: 'daily' | 'intraday'
   model_accuracy: number
+  error?: string
+}
+
+interface VixData {
+  current: number
+  change_pct: number
+  regime: 'LOW' | 'NORMAL' | 'ELEVATED' | 'HIGH'
+  emoji: string
+  note: string
   error?: string
 }
 
@@ -55,6 +89,7 @@ interface DailySignals {
     confidence: number
     risk_reward: number
   } | null
+  vix?: VixData | null
 }
 
 // Technical Breakdown Types
@@ -295,8 +330,8 @@ export function MLMorningBriefing() {
 
     fetchSignals()
 
-    // Refresh every 5 minutes
-    const interval = setInterval(fetchSignals, 5 * 60 * 1000)
+    // Refresh every 1 minute for real-time updates
+    const interval = setInterval(fetchSignals, 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -374,6 +409,32 @@ export function MLMorningBriefing() {
         </div>
       </div>
 
+      {/* VIX Display */}
+      {signals.vix && !signals.vix.error && (
+        <div className="bg-gray-800/50 rounded-lg p-3 mb-4 border border-gray-700">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400 text-sm font-medium">VIX</span>
+              <span className="text-white font-bold text-lg">{signals.vix.current}</span>
+              <span className={`text-xs ${signals.vix.change_pct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                {signals.vix.change_pct >= 0 ? '+' : ''}{signals.vix.change_pct}%
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                signals.vix.regime === 'HIGH' ? 'bg-red-500/20 text-red-400' :
+                signals.vix.regime === 'ELEVATED' ? 'bg-orange-500/20 text-orange-400' :
+                signals.vix.regime === 'NORMAL' ? 'bg-green-500/20 text-green-400' :
+                'bg-blue-500/20 text-blue-400'
+              }`}>
+                {signals.vix.emoji} {signals.vix.regime}
+              </span>
+            </div>
+          </div>
+          <p className="text-gray-500 text-xs mt-1">{signals.vix.note}</p>
+        </div>
+      )}
+
       {/* Best Trade */}
       {signals.best_trade && signals.tickers[signals.best_trade.ticker] && (
         <div className="bg-gray-800/50 rounded-lg p-3 mb-4 border border-gray-700">
@@ -413,12 +474,56 @@ export function MLMorningBriefing() {
             )
           }
 
+          // Derive signal from intraday model when available
+          const useIntraday = sig.intraday_model && sig.prediction_source === 'intraday'
+          const displayProb = useIntraday ? sig.intraday_model!.probability : sig.probability
+
+          // Calculate signal based on probability
+          let derivedSignal: 'BUY' | 'SELL' | 'HOLD' = 'HOLD'
+          let derivedStrength: 'STRONG' | 'MODERATE' | 'WEAK' | 'NEUTRAL' = 'NEUTRAL'
+          let derivedEmoji = '⏸️'
+
+          if (displayProb >= 0.7) {
+            derivedSignal = 'BUY'
+            derivedStrength = 'STRONG'
+            derivedEmoji = '🟢'
+          } else if (displayProb >= 0.6) {
+            derivedSignal = 'BUY'
+            derivedStrength = 'MODERATE'
+            derivedEmoji = '🟢'
+          } else if (displayProb >= 0.55) {
+            derivedSignal = 'BUY'
+            derivedStrength = 'WEAK'
+            derivedEmoji = '🟡'
+          } else if (displayProb <= 0.3) {
+            derivedSignal = 'SELL'
+            derivedStrength = 'STRONG'
+            derivedEmoji = '🔴'
+          } else if (displayProb <= 0.4) {
+            derivedSignal = 'SELL'
+            derivedStrength = 'MODERATE'
+            derivedEmoji = '🔴'
+          } else if (displayProb <= 0.45) {
+            derivedSignal = 'SELL'
+            derivedStrength = 'WEAK'
+            derivedEmoji = '🟡'
+          } else {
+            derivedSignal = 'HOLD'
+            derivedStrength = 'NEUTRAL'
+            derivedEmoji = '⏸️'
+          }
+
+          // Use derived signal if intraday, otherwise use API signal
+          const finalSignal = useIntraday ? derivedSignal : sig.signal
+          const finalStrength = useIntraday ? derivedStrength : sig.strength
+          const finalEmoji = useIntraday ? derivedEmoji : sig.emoji
+
           return (
             <div key={ticker} className="bg-gray-800/30 rounded-lg p-3 border border-gray-700/50">
               {/* Top row: Ticker + Signal */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-xl">{sig.emoji}</span>
+                  <span className="text-xl">{finalEmoji}</span>
                   <div>
                     <div className="text-white font-bold text-lg">{ticker}</div>
                     <div className="text-gray-500 text-xs">
@@ -426,21 +531,130 @@ export function MLMorningBriefing() {
                     </div>
                   </div>
                 </div>
-                <div className={`px-4 py-2 rounded-lg text-center ${getSignalBg(sig.signal)}`}>
-                  <div className={`font-bold text-lg ${getSignalColor(sig.signal)}`}>
-                    {sig.signal}
+                <div className={`px-4 py-2 rounded-lg text-center ${getSignalBg(finalSignal)}`}>
+                  <div className={`font-bold text-lg ${getSignalColor(finalSignal)}`}>
+                    {finalSignal}
                   </div>
                   <div className="text-gray-400 text-xs">
-                    {sig.strength}
+                    {finalStrength}
                   </div>
                 </div>
               </div>
 
-              {/* High/Low Model Predicted Range - Prominent Display */}
-              {sig.highlow_model && signals.is_after_hours && (
+              {/* INTRADAY MODEL - Both Targets */}
+              {sig.intraday_model && sig.prediction_source === 'intraday' && (
+                <div className="bg-purple-900/30 border border-purple-700/50 rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-purple-400 text-xs font-semibold">
+                      📊 INTRADAY PREDICTION
+                      <span className="text-gray-500 font-normal ml-2">
+                        ({sig.intraday_model.session_label} • {(sig.intraday_model.time_pct * 100).toFixed(0)}% through day)
+                      </span>
+                    </div>
+                    <div className="text-gray-500 text-xs">
+                      {(sig.intraday_model.model_accuracy * 100).toFixed(0)}% accuracy
+                    </div>
+                  </div>
+
+                  {/* Two predictions side by side */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Target A: Close > Open (Bullish Day) */}
+                    <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                      <div className="text-gray-400 text-xs mb-1">Bullish Day?</div>
+                      <div className="text-gray-500 text-xs mb-2">(close {'>'} open)</div>
+                      {sig.intraday_model.probability_close_above_open !== null ? (
+                        <>
+                          <div className={`text-2xl font-bold ${
+                            sig.intraday_model.probability_close_above_open >= 0.6 ? 'text-green-400' :
+                            sig.intraday_model.probability_close_above_open <= 0.4 ? 'text-red-400' :
+                            'text-yellow-400'
+                          }`}>
+                            {(sig.intraday_model.probability_close_above_open * 100).toFixed(0)}%
+                          </div>
+                          <div className={`text-xs mt-1 ${
+                            sig.intraday_model.probability_close_above_open >= 0.6 ? 'text-green-400' :
+                            sig.intraday_model.probability_close_above_open <= 0.4 ? 'text-red-400' :
+                            'text-yellow-400'
+                          }`}>
+                            {sig.intraday_model.probability_close_above_open >= 0.6 ? '🟢 YES' :
+                             sig.intraday_model.probability_close_above_open <= 0.4 ? '🔴 NO' :
+                             '🟡 UNCERTAIN'}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-gray-500 text-sm">N/A</div>
+                      )}
+                    </div>
+
+                    {/* Target B: Close > Current (Price Going Up) */}
+                    <div className="bg-gray-900/50 rounded-lg p-3 text-center">
+                      <div className="text-gray-400 text-xs mb-1">Price Going Up?</div>
+                      <div className="text-gray-500 text-xs mb-2">(close {'>'} ${sig.current_price})</div>
+                      <div className={`text-2xl font-bold ${
+                        sig.intraday_model.probability >= 0.6 ? 'text-green-400' :
+                        sig.intraday_model.probability <= 0.4 ? 'text-red-400' :
+                        'text-yellow-400'
+                      }`}>
+                        {(sig.intraday_model.probability * 100).toFixed(0)}%
+                      </div>
+                      <div className={`text-xs mt-1 ${
+                        sig.intraday_model.probability >= 0.6 ? 'text-green-400' :
+                        sig.intraday_model.probability <= 0.4 ? 'text-red-400' :
+                        'text-yellow-400'
+                      }`}>
+                        {sig.intraday_model.probability >= 0.6 ? '🟢 YES' :
+                         sig.intraday_model.probability <= 0.4 ? '🔴 NO' :
+                         '🟡 UNCERTAIN'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Confidence */}
+                  <div className="text-center mt-2">
+                    <div className="text-gray-500 text-xs">
+                      Confidence: {(sig.intraday_model.confidence * 100).toFixed(0)}%
+                      {sig.intraday_model.confidence < 0.2 && (
+                        <span className="text-yellow-400 ml-2">(low - wait for confirmation)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Session details */}
+                  <div className="grid grid-cols-3 gap-2 mt-2 text-center text-xs">
+                    <div className="bg-gray-900/50 rounded p-2">
+                      <div className="text-gray-500">vs Open</div>
+                      <div className={`font-medium ${sig.intraday_model.current_vs_open >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {sig.intraday_model.current_vs_open >= 0 ? '+' : ''}{sig.intraday_model.current_vs_open.toFixed(2)}%
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/50 rounded p-2">
+                      <div className="text-gray-500">In Range</div>
+                      <div className="text-white font-medium">
+                        {sig.intraday_model.position_in_range.toFixed(0)}%
+                      </div>
+                    </div>
+                    <div className="bg-gray-900/50 rounded p-2">
+                      <div className="text-gray-500">Session</div>
+                      <div className="text-cyan-400 font-medium">
+                        {(sig.intraday_model.time_pct * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timing warning */}
+                  {sig.intraday_model.time_pct < 0.1 && (
+                    <div className="mt-2 text-center text-xs text-yellow-400 bg-yellow-500/10 rounded p-2">
+                      ⚠️ Early session - wait 30-40 min for reliable signals
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* High/Low Model Predicted Range - Show when after hours OR alongside intraday */}
+              {sig.highlow_model && (signals.is_after_hours || !sig.intraday_model) && (
                 <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3 mb-3">
                   <div className="text-blue-400 text-xs font-semibold mb-2">
-                    Tomorrow's ML Predicted Range
+                    {signals.is_after_hours ? "Tomorrow's" : "Today's"} ML Predicted Range
                     {sig.highlow_model.capture_rate > 0 && (
                       <span className="text-gray-500 font-normal ml-2">
                         ({sig.highlow_model.capture_rate.toFixed(0)}% capture rate)
@@ -463,11 +677,11 @@ export function MLMorningBriefing() {
                 </div>
               )}
 
-              {/* Trade Details */}
-              <div className="grid grid-cols-4 gap-2 text-center text-xs">
+              {/* Trade Details with Remaining Potential */}
+              <div className="grid grid-cols-4 gap-2 text-center text-xs mb-2">
                 <div className="bg-gray-900/50 rounded p-2">
-                  <div className="text-gray-500">Entry</div>
-                  <div className="text-white font-medium">${sig.entry_price}</div>
+                  <div className="text-gray-500">Now</div>
+                  <div className="text-white font-medium">${sig.current_price}</div>
                 </div>
                 <div className="bg-gray-900/50 rounded p-2">
                   <div className={sig.signal === 'BUY' ? 'text-green-400' : sig.signal === 'SELL' ? 'text-red-400' : 'text-gray-500'}>Target</div>
@@ -485,32 +699,75 @@ export function MLMorningBriefing() {
                 </div>
               </div>
 
-              {/* Probability display - show both bull/bear with edge over coin flip */}
-              <div className="mt-2">
-                {/* Bull vs Bear bar */}
-                <div className="flex items-center gap-2 text-xs mb-1">
-                  <span className="text-green-400 w-16 text-right">{(sig.probability * 100).toFixed(0)}% Bull</span>
-                  <div className="flex-1 h-2 bg-gray-700 rounded overflow-hidden flex">
-                    <div className="h-full bg-green-500" style={{ width: `${sig.probability * 100}%` }} />
-                    <div className="h-full bg-red-500" style={{ width: `${(1 - sig.probability) * 100}%` }} />
+              {/* Remaining Potential */}
+              {sig.remaining_potential && (
+                <div className="flex items-center justify-between bg-gray-900/30 rounded px-3 py-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400 text-xs">
+                      ↑ ${sig.remaining_potential.upside_dollars} ({sig.remaining_potential.upside_pct}%)
+                    </span>
+                    <span className="text-gray-600">|</span>
+                    <span className="text-red-400 text-xs">
+                      ↓ ${sig.remaining_potential.downside_dollars} ({sig.remaining_potential.downside_pct}%)
+                    </span>
                   </div>
-                  <span className="text-red-400 w-16">{((1 - sig.probability) * 100).toFixed(0)}% Bear</span>
-                </div>
-                {/* Edge indicator */}
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">
-                    Edge: {Math.abs(sig.probability - 0.5) * 100 < 5 ? (
-                      <span className="text-yellow-400">~Coin flip</span>
-                    ) : (
-                      <span className={sig.probability > 0.5 ? 'text-green-400' : 'text-red-400'}>
-                        +{(Math.abs(sig.probability - 0.5) * 100).toFixed(0)}% {sig.probability > 0.5 ? 'bullish' : 'bearish'}
+                  <div className="flex items-center gap-2">
+                    {sig.remaining_potential.target_extended && (
+                      <span className="text-yellow-400 text-xs bg-yellow-500/10 px-1.5 py-0.5 rounded">
+                        Extended
                       </span>
                     )}
-                  </span>
-                  <span className="text-gray-600">
-                    Model accuracy: {(sig.model_accuracy * 100).toFixed(0)}%
-                  </span>
+                    <span className="text-gray-500 text-xs">Remaining potential</span>
+                  </div>
                 </div>
+              )}
+
+              {/* Multi-Timeframe Price Ranges */}
+              <div className="mb-2">
+                <PriceRanges ticker={ticker} currentPrice={sig.current_price} />
+              </div>
+
+              {/* Probability display - use intraday model when available */}
+              <div className="mt-2">
+                {(() => {
+                  // Use intraday probability if available, otherwise daily
+                  const displayProb = sig.intraday_model && sig.prediction_source === 'intraday'
+                    ? sig.intraday_model.probability
+                    : sig.probability
+                  const displayAccuracy = sig.intraday_model && sig.prediction_source === 'intraday'
+                    ? sig.intraday_model.model_accuracy
+                    : sig.model_accuracy
+                  const source = sig.prediction_source === 'intraday' ? 'Intraday' : 'Daily'
+
+                  return (
+                    <>
+                      {/* Bull vs Bear bar */}
+                      <div className="flex items-center gap-2 text-xs mb-1">
+                        <span className="text-green-400 w-16 text-right">{(displayProb * 100).toFixed(0)}% Bull</span>
+                        <div className="flex-1 h-2 bg-gray-700 rounded overflow-hidden flex">
+                          <div className="h-full bg-green-500" style={{ width: `${displayProb * 100}%` }} />
+                          <div className="h-full bg-red-500" style={{ width: `${(1 - displayProb) * 100}%` }} />
+                        </div>
+                        <span className="text-red-400 w-16">{((1 - displayProb) * 100).toFixed(0)}% Bear</span>
+                      </div>
+                      {/* Edge indicator */}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500">
+                          Edge: {Math.abs(displayProb - 0.5) * 100 < 5 ? (
+                            <span className="text-yellow-400">~Coin flip</span>
+                          ) : (
+                            <span className={displayProb > 0.5 ? 'text-green-400' : 'text-red-400'}>
+                              +{(Math.abs(displayProb - 0.5) * 100).toFixed(0)}% {displayProb > 0.5 ? 'bullish' : 'bearish'}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-gray-600">
+                          {source} model: {(displayAccuracy * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             </div>
           )

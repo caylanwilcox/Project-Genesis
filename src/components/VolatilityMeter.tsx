@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 
-const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'http://localhost:5001'
+const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'https://genesis-production-c1e9.up.railway.app'
 
 interface TickerVolatility {
   regime: 'LOW' | 'NORMAL' | 'HIGH'
