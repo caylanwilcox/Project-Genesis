@@ -201,18 +201,20 @@ export default function Dashboard() {
     return 'text-gray-400'
   }
 
-  // Get historical accuracy based on confidence level (from backtest results)
+  // Get historical accuracy based on confidence level (from REAL backtest results - 2025 out-of-sample)
   const getHistoricalAccuracy = (probB: number): { accuracy: number; label: string } => {
     const confidence = Math.max(probB, 1 - probB) * 100
 
-    // Based on backtest results at different confidence buckets
-    if (confidence >= 80) return { accuracy: 82, label: 'Strong Signal' }
-    if (confidence >= 75) return { accuracy: 80, label: 'Strong Signal' }
-    if (confidence >= 70) return { accuracy: 75, label: 'Good Signal' }
-    if (confidence >= 65) return { accuracy: 70, label: 'Decent Signal' }
-    if (confidence >= 60) return { accuracy: 65, label: 'Moderate Signal' }
-    if (confidence >= 55) return { accuracy: 58, label: 'Weak Signal' }
-    return { accuracy: 50, label: 'Neutral' }
+    // REAL accuracy from backtest: Target B at 12 PM, 2025 out-of-sample data
+    if (confidence >= 90) return { accuracy: 100, label: 'Very Strong' }  // 6 trades, 100%
+    if (confidence >= 85) return { accuracy: 79, label: 'Strong Signal' } // 63 trades, 79.4%
+    if (confidence >= 80) return { accuracy: 80, label: 'Strong Signal' } // 108 trades, 79.6%
+    if (confidence >= 75) return { accuracy: 76, label: 'Good Signal' }   // 108 trades, 75.9%
+    if (confidence >= 70) return { accuracy: 65, label: 'Moderate' }      // 106 trades, 65.1%
+    if (confidence >= 65) return { accuracy: 60, label: 'Weak Signal' }   // 114 trades, 59.6%
+    if (confidence >= 60) return { accuracy: 60, label: 'Weak Signal' }   // 82 trades, 59.8%
+    if (confidence >= 55) return { accuracy: 54, label: 'Coin Flip' }     // 84 trades, 53.6%
+    return { accuracy: 53, label: 'Coin Flip' }                           // 58 trades, 53.4%
   }
 
   const getAccuracyColor = (accuracy: number) => {
