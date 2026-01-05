@@ -23,6 +23,28 @@ import { getFvgGapSettingsForTimeframe } from '@/utils/fvgThresholdPolicy'
 import { aggregateBarsToDuration, INTRADAY_TIMEFRAMES, mergeCandlesReplacing, TIMEFRAME_IN_MS } from '@/hooks/polygonRealtimeUtils'
 import { generateFvgSignals, getBestSignal, FvgStrategySignal } from '@/services/fvgStrategyService'
 
+// ML Prediction types from trained model
+interface MLPrediction {
+  date: string
+  symbol: string
+  vwap: number
+  unit: number
+  levels: {
+    long: { t1: number; t2: number; t3: number; stop_loss: number }
+    short: { t1: number; t2: number; t3: number; stop_loss: number }
+  }
+  probabilities: {
+    long: { touch_t1: number; touch_t2: number; touch_t3: number; touch_sl: number }
+    short: { touch_t1: number; touch_t2: number; touch_t3: number; touch_sl: number }
+  }
+  first_touch_probs: Record<string, number>
+  recommendation: {
+    bias: 'LONG' | 'SHORT' | 'NEUTRAL'
+    confidence: number
+    rationale: string
+  }
+}
+
 const ProfessionalChart = dynamic(() => import('@/components/ProfessionalChart').then(m => m.ProfessionalChart), {
   ssr: false,
 })
@@ -85,6 +107,7 @@ export default function TickerPage() {
   const [priceFlash, setPriceFlash] = useState<'up' | 'down' | null>(null)
   const [v6Prediction, setV6Prediction] = useState<V6Prediction | null>(null)
   const [showMLOverlay, setShowMLOverlay] = useState(true)
+  const [mlPrediction, setMlPrediction] = useState<MLPrediction | null>(null)
   const fvgGapSettings = useMemo(() => getFvgGapSettingsForTimeframe(timeframe), [timeframe])
   const fvgDisplayPrecision = useMemo(() => (fvgGapSettings.step < 0.1 ? 2 : 1), [fvgGapSettings.step])
   const formatFvgPercent = (value: number, precision = value < 1 ? 2 : 1) => value.toFixed(precision)
@@ -200,6 +223,35 @@ export default function TickerPage() {
     return () => clearInterval(interval)
   }, [symbol])
 
+  // Fetch ML prediction from trained model (SPY Daily Range Plan)
+  useEffect(() => {
+    if (!symbol || symbol.toUpperCase() !== 'SPY') return // Only for SPY
+
+    const fetchMLPrediction = async () => {
+      try {
+        const res = await fetch(`/api/ml-prediction?symbol=${symbol.toUpperCase()}&price=${livePrice}`)
+        if (!res.ok) return
+
+        const data = await res.json()
+        if (data && data.levels) {
+          setMlPrediction(data)
+          console.log('[MLPrediction] Loaded:', data.recommendation?.bias, data.probabilities?.long?.touch_t1)
+        }
+      } catch (err) {
+        console.error('[MLPrediction] Failed to fetch:', err)
+      }
+    }
+
+    // Fetch when price becomes available
+    if (livePrice > 0) {
+      fetchMLPrediction()
+    }
+
+    // Refresh every 5 minutes
+    const interval = setInterval(fetchMLPrediction, 5 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [symbol, livePrice])
+
   // WebSocket connection for real-time streaming - ALWAYS enabled
   const handleWsBar = useCallback((bar: AggregateBar) => {
     console.log('[TickerPage] WebSocket bar received:', bar);
@@ -278,28 +330,55 @@ export default function TickerPage() {
     return getBestSignal(signals)
   }, [polygonData])
 
-  // Use FVG-calculated targets, or fall back to percentage-based if no FVG signal
+  // Use ML-predicted targets (highest priority), then FVG, then fallback
   const chartTargets = useMemo(() => {
+    // ML prediction has highest priority for SPY
+    if (mlPrediction && mlPrediction.levels) {
+      const bias = mlPrediction.recommendation?.bias
+      // Use long targets if LONG bias, short targets if SHORT, long as default
+      if (bias === 'SHORT') {
+        return [
+          mlPrediction.levels.short.t1,
+          mlPrediction.levels.short.t2,
+          mlPrediction.levels.short.t3,
+        ]
+      }
+      return [
+        mlPrediction.levels.long.t1,
+        mlPrediction.levels.long.t2,
+        mlPrediction.levels.long.t3,
+      ]
+    }
+    // FVG signal as secondary
     if (fvgSignal) {
       return [fvgSignal.tp1, fvgSignal.tp2, fvgSignal.tp3]
     }
-    // Fallback: no FVG signal available
+    // Fallback: no signal available
     if (livePrice <= 0) return []
     return [
       livePrice * 1.005, // +0.5%
       livePrice * 1.01,  // +1.0%
       livePrice * 1.02,  // +2.0%
     ]
-  }, [fvgSignal, livePrice])
+  }, [mlPrediction, fvgSignal, livePrice])
 
-  // Use FVG-calculated entry and stop loss
+  // Use ML VWAP as entry, or FVG, or current price
   const chartEntryPoint = useMemo(() => {
+    if (mlPrediction?.vwap) return mlPrediction.vwap
     return fvgSignal?.entryPrice ?? livePrice
-  }, [fvgSignal, livePrice])
+  }, [mlPrediction, fvgSignal, livePrice])
 
+  // Use ML stop loss based on bias, or FVG, or fallback
   const chartStopLoss = useMemo(() => {
+    if (mlPrediction && mlPrediction.levels) {
+      const bias = mlPrediction.recommendation?.bias
+      if (bias === 'SHORT') {
+        return mlPrediction.levels.short.stop_loss
+      }
+      return mlPrediction.levels.long.stop_loss
+    }
     return fvgSignal?.stopLoss ?? (livePrice * 0.98)
-  }, [fvgSignal, livePrice])
+  }, [mlPrediction, fvgSignal, livePrice])
 
   // Calculate technical indicators from real data
   const calculateRSI = (data: NormalizedChartData[], period: number = 14): number => {
@@ -1104,12 +1183,30 @@ export default function TickerPage() {
             <div className="flex items-center gap-2 mb-4">
               <div className="w-2 h-2 bg-green-400 rounded-full"></div>
               <h3 className="text-green-400 font-semibold uppercase text-sm tracking-wider">
-                Target Levels {fvgSignal ? '(FVG)' : '(Est.)'}
+                Target Levels {mlPrediction ? '(ML)' : fvgSignal ? '(FVG)' : '(Est.)'}
               </h3>
+              {mlPrediction && (
+                <span className={`text-xs px-2 py-0.5 rounded ${
+                  mlPrediction.recommendation?.bias === 'LONG' ? 'bg-green-500/20 text-green-400' :
+                  mlPrediction.recommendation?.bias === 'SHORT' ? 'bg-red-500/20 text-red-400' :
+                  'bg-yellow-500/20 text-yellow-400'
+                }`}>
+                  {mlPrediction.recommendation?.bias}
+                </span>
+              )}
             </div>
             <div className="space-y-4">
               <div className="bg-gray-800/50 rounded-lg p-3">
-                <div className="text-gray-400 text-xs font-medium mb-1">Target 1 (0.5:1 R:R)</div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-400 text-xs font-medium">Target 1 (0.5u)</span>
+                  {mlPrediction && (
+                    <span className="text-cyan-400 text-xs font-bold">
+                      {Math.round((mlPrediction.recommendation?.bias === 'SHORT'
+                        ? mlPrediction.probabilities?.short?.touch_t1
+                        : mlPrediction.probabilities?.long?.touch_t1) * 100)}% prob
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <div className="text-lg sm:text-xl font-bold">${chartTargets[0]?.toFixed(2) ?? '--'}</div>
                   <span className="text-green-400 text-xs sm:text-sm font-semibold">
@@ -1118,7 +1215,16 @@ export default function TickerPage() {
                 </div>
               </div>
               <div className="bg-gray-800/50 rounded-lg p-3">
-                <div className="text-gray-400 text-xs font-medium mb-1">Target 2 (1:1 R:R)</div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-400 text-xs font-medium">Target 2 (1.0u)</span>
+                  {mlPrediction && (
+                    <span className="text-cyan-400 text-xs font-bold">
+                      {Math.round((mlPrediction.recommendation?.bias === 'SHORT'
+                        ? mlPrediction.probabilities?.short?.touch_t2
+                        : mlPrediction.probabilities?.long?.touch_t2) * 100)}% prob
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <div className="text-lg sm:text-xl font-bold">${chartTargets[1]?.toFixed(2) ?? '--'}</div>
                   <span className="text-green-400 text-xs sm:text-sm font-semibold">
@@ -1127,7 +1233,16 @@ export default function TickerPage() {
                 </div>
               </div>
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                <div className="text-gray-400 text-xs font-medium mb-1">Target 3 (2:1 R:R)</div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-400 text-xs font-medium">Target 3 (1.5u)</span>
+                  {mlPrediction && (
+                    <span className="text-cyan-400 text-xs font-bold">
+                      {Math.round((mlPrediction.recommendation?.bias === 'SHORT'
+                        ? mlPrediction.probabilities?.short?.touch_t3
+                        : mlPrediction.probabilities?.long?.touch_t3) * 100)}% prob
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <div className="text-lg sm:text-xl font-bold text-green-400">${chartTargets[2]?.toFixed(2) ?? '--'}</div>
                   <span className="text-green-400 text-xs sm:text-sm font-semibold">
