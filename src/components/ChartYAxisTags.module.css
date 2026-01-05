@@ -1,0 +1,81 @@
+.yAxisTagsContainer { position: absolute; inset: 0; pointer-events: none; }
+.yAxisTag {
+  position: absolute; right: var(--chart-y-axis-label-inset);
+  width: calc(var(--chart-y-axis-gutter) - var(--chart-y-axis-label-inset));
+  height: 22px; display: flex; align-items: center; justify-content: center;
+  border-radius: 2px;
+}
+.yAxisTagLabel { font-family: monospace; font-weight: 700; font-size: 10px; }
+
+.yAxisTag--target { background: #22c55e88; color: #fff; }
+.yAxisTag--stop { background: #ef444488; color: #fff; }
+.yAxisTag--entry { background: #06b6d488; color: #fff; }
+.yAxisTag--current { background: #fbbf24; color: #000; }
+/* Chart Y-Axis Tags - Price level indicators */
+
+.yAxisTagsContainer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.yAxisTag {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 0;
+  width: var(--chart-y-axis-gutter);
+}
+
+.yAxisTagLabel {
+  font-family: monospace;
+  font-weight: 700;
+  font-size: 10px;
+}
+
+/* Smaller font on mobile */
+@media (max-width: 480px) {
+  .yAxisTag {
+    height: 18px;
+  }
+
+  .yAxisTagLabel {
+    font-size: 8px;
+  }
+}
+
+/* Tag variants for different price levels */
+.yAxisTag--target {
+  background: #22c55e88;
+  color: #ffffff;
+}
+
+.yAxisTag--stop {
+  background: #ef444488;
+  color: #ffffff;
+}
+
+.yAxisTag--entry {
+  background: #06b6d488;
+  color: #ffffff;
+}
+
+.yAxisTag--current {
+  background: #fbbf24;
+  color: #000000;
+}
+
+/* Range levels for balanced/choppy market structure */
+.yAxisTag--range {
+  background: #f59e0b88;
+  color: #ffffff;
+}
+
+/* Retest levels - where price retests on range failure */
+.yAxisTag--retest {
+  background: #06b6d466;
+  color: #ffffff;
+  border: 1px dashed #06b6d4;
+}

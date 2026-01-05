@@ -1,0 +1,156 @@
+/* Signal Indicator Styles - Mathematical Precision */
+.signalContainer {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: var(--space-2) 0;
+  width: 100%;
+}
+
+.signalWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  max-width: var(--signal-badge-width);
+}
+
+.signalBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  border-width: clamp(2px, 0.2vw, 3px);
+  box-shadow: 0 var(--space-2) var(--space-4) rgba(0, 0, 0, 0.2);
+  text-align: center;
+  width: var(--signal-badge-width);
+  height: var(--signal-badge-height);
+  position: relative;
+  overflow: hidden;
+}
+
+.signalBadgeDesktop {
+  composes: signalBadge;
+  padding: var(--space-4) var(--space-6);
+}
+
+.signalBadgeMobile {
+  composes: signalBadge;
+  padding: var(--space-3) var(--space-4);
+}
+
+.signalBadgeStrongBuy {
+  border-color: #10b981;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+}
+
+.signalBadgeBuy {
+  border-color: #34d399;
+  box-shadow: 0 0 15px rgba(52, 211, 153, 0.3);
+}
+
+.signalBadgeNeutral {
+  border-color: #f59e0b;
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+}
+
+.signalBadgeSell {
+  border-color: #ef4444;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+}
+
+.signalBadgeStrongSell {
+  border-color: #dc2626;
+  box-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
+}
+
+.signalText {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: linear-gradient(to right, transparent, transparent);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.signalTextDesktop {
+  composes: signalText;
+  font-size: var(--text-4xl);
+  min-height: calc(var(--text-4xl) * 1.2);
+}
+
+.signalTextMobile {
+  composes: signalText;
+  font-size: var(--text-2xl);
+  min-height: calc(var(--text-2xl) * 1.2);
+}
+
+.signalTextStrongBuy {
+  background: linear-gradient(to right, #059669, #10b981);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.signalTextBuy {
+  background: linear-gradient(to right, #10b981, #34d399);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.signalTextNeutral {
+  background: linear-gradient(to right, #d97706, #f59e0b);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.signalTextSell {
+  background: linear-gradient(to right, #dc2626, #ef4444);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.signalTextStrongSell {
+  background: linear-gradient(to right, #b91c1c, #dc2626);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.signalDescription {
+  color: #9CA3AF;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.signalDescriptionDesktop {
+  composes: signalDescription;
+  font-size: var(--text-lg);
+  margin-top: var(--space-3);
+}
+
+.signalDescriptionMobile {
+  composes: signalDescription;
+  font-size: var(--text-base);
+  margin-top: var(--space-2);
+}

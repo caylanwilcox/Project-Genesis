@@ -1,0 +1,83 @@
+/* Trading Grid Layout Styles - No External Margins */
+.container {
+  min-height: 100vh;
+  width: 100vw;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.containerMobile {
+  composes: container;
+}
+
+.containerDesktop {
+  composes: container;
+}
+
+.mobileGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  min-height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+}
+
+.desktopGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  height: 100vh;
+  width: 100vw;
+  box-sizing: border-box;
+}
+
+/* Grid item sizing - full viewport coverage */
+.gridItem {
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+}
+
+/* Mobile grid items - equal height distribution */
+.mobileGrid .gridItem {
+  flex: 0 1 auto; /* allow content to define height */
+  min-height: auto;
+  height: auto;
+  max-height: none;
+}
+
+/* Desktop grid items - perfect squares with no gaps */
+.desktopGrid .gridItem {
+  height: 50vh; /* Each item takes exactly 50% of viewport height */
+  min-height: 50vh;
+  max-height: 50vh;
+}
+
+/* Responsive adjustments - maintain exact viewport coverage */
+@media (max-width: 480px) {
+  .mobileGrid { gap: 8px; }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .mobileGrid .gridItem { min-height: auto; height: auto; max-height: none; }
+}
+
+/* All screen sizes maintain full viewport coverage */
+@media (min-width: 1920px) {
+  .desktopGrid {
+    width: 100vw;
+    height: 100vh;
+  }
+}

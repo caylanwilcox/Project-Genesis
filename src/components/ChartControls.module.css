@@ -1,0 +1,163 @@
+.chartTypeButton {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: rgba(31, 41, 55, 0.6);
+  color: #e5e7eb;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+.chartTypeButton:hover { background: rgba(31, 41, 55, 0.9); }
+
+.intervalDropdownContainer { position: relative; }
+.intervalButton {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 9999px;
+  background: rgba(31, 41, 55, 0.6);
+  color: #e5e7eb;
+  transition: background 0.2s ease;
+  white-space: nowrap;
+}
+.intervalButton:hover { background: rgba(31, 41, 55, 0.9); }
+
+.intervalDropdown {
+  position: absolute;
+  right: 0; top: 100%; margin-top: 4px;
+  background: #1f2937; /* gray-800 */
+  border: 1px solid #374151; /* gray-700 */
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 50;
+  min-width: 140px;
+}
+
+.intervalOption {
+  width: 100%; text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #d1d5db;
+  background: transparent;
+}
+.intervalOption:hover { background: #374151; }
+.active { color: #60a5fa; background: rgba(55, 65, 81, 0.5); }
+/* Chart Controls - Buttons and dropdowns for chart interaction */
+
+.chartTypeButton {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  background-color: rgba(31, 41, 55, 0.6);
+  color: rgb(229, 231, 235);
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+@media (min-width: 640px) {
+  .chartTypeButton {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+}
+
+.chartTypeButton:hover {
+  background-color: rgb(31, 41, 55);
+}
+
+.intervalDropdownContainer {
+  position: relative;
+}
+
+.intervalButton {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  background-color: rgba(31, 41, 55, 0.6);
+  color: rgb(229, 231, 235);
+  white-space: nowrap;
+  transition: background-color 0.2s;
+}
+
+@media (min-width: 640px) {
+  .intervalButton {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+}
+
+.intervalButton:hover {
+  background-color: rgb(31, 41, 55);
+}
+
+.intervalDropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.25rem;
+  background-color: rgb(31, 41, 55);
+  border: 1px solid rgb(55, 65, 81);
+  border-radius: 0.375rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  min-width: 120px;
+}
+
+.intervalOption {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  transition: background-color 0.2s;
+  color: rgb(209, 213, 219);
+}
+
+.intervalOption:first-child {
+  border-top-left-radius: 0.375rem;
+  border-top-right-radius: 0.375rem;
+}
+
+.intervalOption:last-child {
+  border-bottom-left-radius: 0.375rem;
+  border-bottom-right-radius: 0.375rem;
+}
+
+.intervalOption:hover {
+  background-color: rgb(55, 65, 81);
+}
+
+.intervalOption.active {
+  color: rgb(96, 165, 250);
+  background-color: rgba(55, 65, 81, 0.5);
+}
+
+.indicatorsButton {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border-radius: 9999px;
+  background-color: rgba(31, 41, 55, 0.6);
+  color: rgb(229, 231, 235);
+  white-space: nowrap;
+  display: none;
+  align-items: center;
+  gap: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+@media (min-width: 640px) {
+  .indicatorsButton {
+    display: flex;
+  }
+}
+
+.indicatorsButton:hover {
+  background-color: rgb(31, 41, 55);
+}

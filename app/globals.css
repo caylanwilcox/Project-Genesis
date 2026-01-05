@@ -1,0 +1,250 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #0B0E11;
+  color: #ffffff;
+}
+
+/* Semantic chart variables */
+:root {
+  --chart-y-axis-gutter: clamp(60px, 8vw, 100px); /* width of price scale gutter on the right */
+  --chart-y-axis-label-inset: 5px; /* inner padding used when drawing y labels */
+}
+
+/* Responsive adjustments for y-axis gutter */
+@media (max-width: 480px) {
+  :root {
+    --chart-y-axis-gutter: 48px; /* Narrower for mobile to prevent overflow */
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  :root {
+    --chart-y-axis-gutter: 70px; /* Medium for tablets */
+  }
+}
+
+@media (min-width: 769px) {
+  :root {
+    --chart-y-axis-gutter: 90px; /* Wider for desktop to fit 6-digit prices */
+  }
+}
+
+.chart-container { /* outer wrapper for semantic targeting */ }
+.chart-y-axis { width: var(--chart-y-axis-gutter); }
+.chart-x-axis { height: 18px; }
+.ticker-header { }
+.ticker-header__title { }
+.ticker-header__stats { }
+
+/* Chart y-axis tags moved to ChartYAxisTags.module.css */
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #181A20;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2B3139;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3B4149;
+}
+
+/* Premium Trading Interface Styles */
+.trading-card {
+  background: linear-gradient(145deg, #1a1a1a, #0f0f0f);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.trading-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+/* Advanced Button Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(59, 130, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 0 30px rgba(59, 130, 246, 0.6);
+  }
+}
+
+@keyframes button-press {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.btn-shimmer {
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.btn-pulse-glow:hover {
+  animation: pulse-glow 2s infinite;
+}
+
+.btn-press:active {
+  animation: button-press 0.1s ease-in-out;
+}
+
+/* Premium Buy/Sell Button Effects */
+.btn-buy-premium {
+  background: linear-gradient(135deg, #10b981, #059669, #047857);
+  box-shadow:
+    0 4px 20px rgba(16, 185, 129, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-buy-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-buy-premium:hover::before {
+  left: 100%;
+}
+
+.btn-buy-premium:hover {
+  box-shadow:
+    0 6px 30px rgba(16, 185, 129, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 2px rgba(16, 185, 129, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-sell-premium {
+  background: linear-gradient(135deg, #ef4444, #dc2626, #b91c1c);
+  box-shadow:
+    0 4px 20px rgba(239, 68, 68, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-sell-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-sell-premium:hover::before {
+  left: 100%;
+}
+
+.btn-sell-premium:hover {
+  box-shadow:
+    0 6px 30px rgba(239, 68, 68, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 2px rgba(239, 68, 68, 0.2);
+  transform: translateY(-1px);
+}
+
+/* Floating Animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Glow Effect */
+.glow-green {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+}
+
+/* Price Movement Animation */
+@keyframes price-up {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(16, 185, 129, 0.2); }
+  100% { background-color: transparent; }
+}
+
+@keyframes price-down {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(239, 68, 68, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.price-flash-up {
+  animation: price-up 0.6s ease-out;
+}
+
+.price-flash-down {
+  animation: price-down 0.6s ease-out;
+}

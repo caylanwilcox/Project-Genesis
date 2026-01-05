@@ -1,0 +1,146 @@
+.priceScaleDragArea {
+  position: absolute; right: 0; top: 0;
+  width: var(--chart-y-axis-gutter);
+  height: calc(100% - 80px);
+  transition: background 0.2s ease;
+}
+.priceScaleDragArea:hover { background: rgba(59, 130, 246, 0.05); }
+
+.dragIndicator {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 4px; opacity: 0.3;
+}
+.dragIndicatorLine { width: 12px; height: 1px; background: #9ca3af; }
+
+.zoomIndicator {
+  position: absolute; right: 8px; bottom: 16px;
+  background: rgba(31, 41, 55, 0.9);
+  border: 1px solid #374151; border-radius: 6px;
+  padding: 2px 6px; font-size: 12px; color: #d1d5db;
+}
+
+.timeScaleDragArea {
+  position: absolute; bottom: 0; left: 0; right: var(--chart-y-axis-gutter);
+  height: 80px; transition: background 0.2s ease;
+}
+.timeScaleDragArea:hover { background: rgba(59, 130, 246, 0.05); }
+
+.timeScaleDragIndicator {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: 50%; transform: translate(-50%, -50%);
+  display: flex; gap: 4px; opacity: 0.3;
+}
+.timeScaleDragIndicatorLine { width: 2px; height: 12px; background: #9ca3af; }
+
+.timeZoomIndicator {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  background: rgba(31, 41, 55, 0.9);
+  border: 1px solid #374151; border-radius: 6px;
+  padding: 2px 6px; font-size: 12px; color: #d1d5db;
+}
+
+/* Height resize handle (bottom bar) */
+.heightResizeHandle {
+  position: absolute; left: 0; right: var(--chart-y-axis-gutter); bottom: 0;
+  height: 10px; cursor: ns-resize; background: transparent;
+}
+.heightResizeHandle:hover { background: rgba(59, 130, 246, 0.06); }
+/* Chart Interaction - Drag areas and zoom controls */
+
+.priceScaleDragArea {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: var(--chart-y-axis-gutter);
+  height: calc(100% - 80px);
+  cursor: ns-resize;
+  pointer-events: auto;
+  transition: background-color 0.2s;
+}
+
+.priceScaleDragArea:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.dragIndicator {
+  position: absolute;
+  right: 0.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+
+.dragIndicator:hover {
+  opacity: 0.7;
+}
+
+.dragIndicatorLine {
+  width: 0.75rem;
+  height: 0.125rem;
+  background-color: rgb(156, 163, 175);
+}
+
+.zoomIndicator {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 1rem;
+  background-color: rgba(31, 41, 55, 0.9);
+  border: 1px solid rgb(55, 65, 81);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(209, 213, 219);
+}
+
+.timeScaleDragArea {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: var(--chart-y-axis-gutter);
+  height: 80px;
+  cursor: ew-resize;
+  pointer-events: auto;
+  transition: background-color 0.2s;
+}
+
+.timeScaleDragArea:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.timeScaleDragIndicator {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+
+.timeScaleDragIndicator:hover {
+  opacity: 0.7;
+}
+
+.timeScaleDragIndicatorLine {
+  width: 0.125rem;
+  height: 0.75rem;
+  background-color: rgb(156, 163, 175);
+}
+
+.timeZoomIndicator {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(31, 41, 55, 0.9);
+  border: 1px solid rgb(55, 65, 81);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(209, 213, 219);
+}

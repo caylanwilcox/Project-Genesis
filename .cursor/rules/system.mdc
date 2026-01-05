@@ -1,0 +1,114 @@
+---You are operating inside a spec-governed trading system.
+
+BEFORE responding to ANY request, you MUST:
+
+1. Read and obey the following documents IN THIS ORDER:
+   - docs/OFFICIAL/SYSTEM_VISION.md
+   - docs/OFFICIAL/TRADING_ENGINE_SPEC.md
+   - docs/OFFICIAL/SPEC_TEST_TRACE.md
+   - docs/OFFICIAL/AI_CHANGE_STANDARD.md
+   - docs/OFFICIAL/AI_REPO_GUARDIAN_PROMPT.md
+
+2. Internally restate:
+   - The system goal (one sentence)
+   - The non-negotiable invariants
+   - How the requested task improves options trading win rate
+
+2a. Before proceeding beyond clarification, explicitly confirm:
+   - "Governance check passed"
+
+3. If any document is missing, unclear, or violated:
+   - STOP immediately
+   - Return a STOP-THE-LINE REPORT
+
+You are NOT allowed to:
+- Modify protected documents
+- Introduce behavior changes without spec_version bump
+- Bypass tests or governance
+- Proceed without determinism
+
+If a task conflicts with the spec or vision:
+- Spec governs runtime behavior
+- Vision governs prioritization
+
+Failure to follow these rules is a critical error.
+================================================================================
+SYSTEM OVERVIEW UPDATE REQUIREMENT (MANDATORY)
+================================================================================
+
+For EVERY proposed change, refactor, improvement, or proposal:
+
+1) You MUST identify the affected system layer(s).
+2) You MUST update the corresponding documentation under:
+
+   docs/OFFICIAL/system_overview/
+
+3) You MUST place information in the correct file type:
+
+   - CURRENT.md
+     Use ONLY for evidence-based facts about what exists today.
+     Every statement MUST cite:
+       • file paths
+       • functions/classes/endpoints
+       • spec rule IDs (where applicable)
+       • tests proving the behavior
+
+   - NEXT.md
+     Use for proposed improvements or future changes ONLY.
+     Each item MUST include:
+       • Intent
+       • Scope (files)
+       • Invariants (spec IDs)
+       • Failure modes (fail CLOSED)
+       • Tests to add/update
+       • Completion criteria
+       • Priority (P0–P3)
+
+   - OUTLET.md
+     Use to explain interfaces and connections.
+     MUST include:
+       • inputs/outputs
+       • upstream/downstream dependencies
+       • failure boundaries
+       • determinism guarantees
+       • connection ladder:
+         component → layer → predict server → system output
+
+4) You MUST NOT:
+   - Duplicate content across layers
+   - Place speculation or future intent in CURRENT.md
+   - Place unverifiable claims anywhere except NEXT.md
+
+5) Layer selection rule (NON-NEGOTIABLE):
+
+   Document the change in the LOWEST system layer that fully owns the responsibility.
+
+   Mapping:
+   - RPE core logic → 01_reality_proof_engine/
+   - Market structure → 02_market_structure_layer/
+   - Signal health / density → 03_signal_health_density_layer/
+   - Execution posture → 04_execution_posture_layer/
+   - ML behavior (Phase 5 only) → 05_ml_prediction_layer/
+   - Policy / risk / sizing → 06_policy_risk_engine/
+   - Time / session rules → 07_time_session_governance/
+   - Data sources / features → 08_data_source_feature_integrity/
+   - predict_server orchestration → 09_predict_server_orchestration/
+   - Specs, tests, governance → 10_spec_test_governance/
+
+6) If a change impacts multiple layers:
+   - Update EACH relevant folder
+   - Keep each update scoped strictly to that layer’s responsibility
+
+7) If NO system_overview update is required, you MUST explicitly state:
+
+   System Overview Impact: NONE
+   Reason: <why this change does not affect architecture, interfaces, or behavior>
+
+Failure to update system_overview documentation when required is a
+STOP-THE-LINE violation.
+
+================================================================================
+
+alwaysApply: true
+
+---

@@ -1,0 +1,492 @@
+"""
+V6 SWING Model - Multi-Timeframe Swing Trade Predictions
+=========================================================
+Predicts multi-day direction for swing trades using daily/weekly data.
+
+Timeframes:
+- Short-term swing: 3-5 day outlook
+- Medium-term swing: 1-2 week outlook
+
+Targets:
+- Target A: Will price be higher in 5 days?
+- Target B: Will price be higher in 10 days?
+
+Key Features:
+- Weekly trend alignment
+- Daily momentum patterns
+- Volume profile
+- Mean reversion signals
+- Volatility regime
+"""
+
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import RobustScaler
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from datetime import datetime, timedelta
+import pickle
+import os
+import requests
+import warnings
+warnings.filterwarnings('ignore')
+
+from config import TRAIN_START, TRAIN_END, TEST_START, TEST_END, RANDOM_STATE, SWING_TICKERS
+
+POLYGON_API_KEY = os.environ.get('POLYGON_API_KEY', 'cLGJlSCuMr4SeGhSUvhbk0A1TIMKxp6O')
+MODELS_DIR = os.path.join(os.path.dirname(__file__), 'v6_models')
+
+# Swing trade horizons
+SHORT_SWING_DAYS = 5   # 1 week trading days
+MEDIUM_SWING_DAYS = 10  # 2 weeks trading days
+
+
+def fetch_daily_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """Fetch daily bars from Polygon."""
+    print(f"  Fetching daily data for {ticker} from {start_date} to {end_date}...")
+    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{start_date}/{end_date}"
+    params = {'adjusted': 'true', 'sort': 'asc', 'limit': 50000, 'apiKey': POLYGON_API_KEY}
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if 'results' not in data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data['results'])
+    df['date'] = pd.to_datetime(df['t'], unit='ms')
+    df = df.rename(columns={'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume'})
+    df = df.set_index('date')
+    print(f"    Got {len(df)} daily bars")
+    return df[['open', 'high', 'low', 'close', 'volume']]
+
+
+def fetch_weekly_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """Fetch weekly bars from Polygon."""
+    print(f"  Fetching weekly data for {ticker}...")
+    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/week/{start_date}/{end_date}"
+    params = {'adjusted': 'true', 'sort': 'asc', 'limit': 50000, 'apiKey': POLYGON_API_KEY}
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    if 'results' not in data:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(data['results'])
+    df['date'] = pd.to_datetime(df['t'], unit='ms')
+    df = df.rename(columns={'o': 'open', 'h': 'high', 'l': 'low', 'c': 'close', 'v': 'volume'})
+    df = df.set_index('date')
+    print(f"    Got {len(df)} weekly bars")
+    return df[['open', 'high', 'low', 'close', 'volume']]
+
+
+def calculate_swing_features(daily_df: pd.DataFrame, weekly_df: pd.DataFrame, idx: int) -> dict:
+    """
+    Calculate features for swing trade prediction.
+
+    Args:
+        daily_df: Daily OHLCV data
+        weekly_df: Weekly OHLCV data
+        idx: Current day index in daily_df
+
+    Returns:
+        Dictionary of features
+    """
+    if idx < 30:  # Need at least 30 days of history
+        return None
+
+    features = {}
+    current_date = daily_df.index[idx]
+
+    # Current price info
+    current = daily_df.iloc[idx]
+    features['current_price'] = current['close']
+
+    # =================
+    # DAILY FEATURES
+    # =================
+
+    # Recent returns
+    for days in [1, 3, 5, 10, 20]:
+        if idx >= days:
+            past_close = daily_df.iloc[idx - days]['close']
+            features[f'return_{days}d'] = (current['close'] - past_close) / past_close
+        else:
+            features[f'return_{days}d'] = 0
+
+    # Moving averages
+    for window in [5, 10, 20, 50]:
+        if idx >= window:
+            sma = daily_df['close'].iloc[idx-window:idx].mean()
+            features[f'dist_from_sma_{window}'] = (current['close'] - sma) / sma
+            features[f'above_sma_{window}'] = 1 if current['close'] > sma else 0
+        else:
+            features[f'dist_from_sma_{window}'] = 0
+            features[f'above_sma_{window}'] = 0
+
+    # Trend strength (SMA alignment)
+    if idx >= 50:
+        sma_5 = daily_df['close'].iloc[idx-5:idx].mean()
+        sma_20 = daily_df['close'].iloc[idx-20:idx].mean()
+        sma_50 = daily_df['close'].iloc[idx-50:idx].mean()
+        features['sma_alignment'] = 1 if (sma_5 > sma_20 > sma_50) else (-1 if sma_5 < sma_20 < sma_50 else 0)
+    else:
+        features['sma_alignment'] = 0
+
+    # Volatility
+    if idx >= 20:
+        returns = daily_df['close'].iloc[idx-20:idx].pct_change().dropna()
+        features['volatility_20d'] = returns.std()
+        features['volatility_10d'] = daily_df['close'].iloc[idx-10:idx].pct_change().dropna().std()
+    else:
+        features['volatility_20d'] = 0
+        features['volatility_10d'] = 0
+
+    # ATR
+    if idx >= 14:
+        tr_list = []
+        for i in range(idx-14, idx):
+            high = daily_df.iloc[i]['high']
+            low = daily_df.iloc[i]['low']
+            prev_close = daily_df.iloc[i-1]['close'] if i > 0 else daily_df.iloc[i]['open']
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_list.append(tr)
+        features['atr_14'] = np.mean(tr_list)
+        features['atr_pct'] = features['atr_14'] / current['close']
+    else:
+        features['atr_14'] = 0
+        features['atr_pct'] = 0
+
+    # RSI-like momentum
+    if idx >= 14:
+        changes = daily_df['close'].iloc[idx-14:idx].diff().dropna()
+        gains = changes[changes > 0].sum()
+        losses = abs(changes[changes < 0].sum())
+        if losses > 0:
+            rs = gains / losses
+            features['rsi_14'] = 100 - (100 / (1 + rs))
+        else:
+            features['rsi_14'] = 100
+    else:
+        features['rsi_14'] = 50
+
+    # Higher highs / Lower lows
+    if idx >= 10:
+        recent_high = daily_df['high'].iloc[idx-5:idx].max()
+        prior_high = daily_df['high'].iloc[idx-10:idx-5].max()
+        recent_low = daily_df['low'].iloc[idx-5:idx].min()
+        prior_low = daily_df['low'].iloc[idx-10:idx-5].min()
+        features['higher_high'] = 1 if recent_high > prior_high else 0
+        features['higher_low'] = 1 if recent_low > prior_low else 0
+        features['lower_high'] = 1 if recent_high < prior_high else 0
+        features['lower_low'] = 1 if recent_low < prior_low else 0
+    else:
+        features['higher_high'] = 0
+        features['higher_low'] = 0
+        features['lower_high'] = 0
+        features['lower_low'] = 0
+
+    # Volume profile
+    if idx >= 20:
+        avg_vol = daily_df['volume'].iloc[idx-20:idx].mean()
+        features['volume_ratio'] = current['volume'] / avg_vol if avg_vol > 0 else 1
+        features['volume_trend'] = daily_df['volume'].iloc[idx-5:idx].mean() / avg_vol if avg_vol > 0 else 1
+    else:
+        features['volume_ratio'] = 1
+        features['volume_trend'] = 1
+
+    # Candle patterns
+    body = current['close'] - current['open']
+    total_range = current['high'] - current['low']
+    features['body_to_range'] = abs(body) / total_range if total_range > 0 else 0
+    features['is_bullish'] = 1 if body > 0 else 0
+    features['upper_wick'] = (current['high'] - max(current['open'], current['close'])) / total_range if total_range > 0 else 0
+    features['lower_wick'] = (min(current['open'], current['close']) - current['low']) / total_range if total_range > 0 else 0
+
+    # Consecutive days
+    consec_up = 0
+    consec_down = 0
+    for i in range(1, min(6, idx)):
+        if daily_df.iloc[idx-i]['close'] > daily_df.iloc[idx-i]['open']:
+            if consec_down == 0:
+                consec_up += 1
+            else:
+                break
+        else:
+            if consec_up == 0:
+                consec_down += 1
+            else:
+                break
+    features['consec_up'] = consec_up
+    features['consec_down'] = consec_down
+
+    # Mean reversion signal
+    features['mean_reversion'] = -features['return_5d']  # Opposite of recent move
+
+    # =================
+    # WEEKLY FEATURES
+    # =================
+
+    # Find corresponding weekly bar
+    week_idx = None
+    for i, w_date in enumerate(weekly_df.index):
+        if w_date <= current_date:
+            week_idx = i
+
+    if week_idx is not None and week_idx >= 4:
+        weekly_current = weekly_df.iloc[week_idx]
+
+        # Weekly returns
+        for weeks in [1, 2, 4]:
+            if week_idx >= weeks:
+                past_close = weekly_df.iloc[week_idx - weeks]['close']
+                features[f'weekly_return_{weeks}w'] = (weekly_current['close'] - past_close) / past_close
+            else:
+                features[f'weekly_return_{weeks}w'] = 0
+
+        # Weekly SMA
+        if week_idx >= 4:
+            weekly_sma_4 = weekly_df['close'].iloc[week_idx-4:week_idx].mean()
+            features['weekly_dist_from_sma_4'] = (weekly_current['close'] - weekly_sma_4) / weekly_sma_4
+            features['weekly_above_sma_4'] = 1 if weekly_current['close'] > weekly_sma_4 else 0
+        else:
+            features['weekly_dist_from_sma_4'] = 0
+            features['weekly_above_sma_4'] = 0
+
+        # Weekly trend
+        features['weekly_bullish'] = 1 if weekly_current['close'] > weekly_current['open'] else 0
+
+        # Weekly RSI
+        if week_idx >= 4:
+            changes = weekly_df['close'].iloc[week_idx-4:week_idx].diff().dropna()
+            gains = changes[changes > 0].sum()
+            losses = abs(changes[changes < 0].sum())
+            if losses > 0:
+                rs = gains / losses
+                features['weekly_rsi'] = 100 - (100 / (1 + rs))
+            else:
+                features['weekly_rsi'] = 100
+        else:
+            features['weekly_rsi'] = 50
+    else:
+        features['weekly_return_1w'] = 0
+        features['weekly_return_2w'] = 0
+        features['weekly_return_4w'] = 0
+        features['weekly_dist_from_sma_4'] = 0
+        features['weekly_above_sma_4'] = 0
+        features['weekly_bullish'] = 0
+        features['weekly_rsi'] = 50
+
+    # =================
+    # TIME FEATURES
+    # =================
+    features['day_of_week'] = current_date.dayofweek
+    features['is_monday'] = 1 if current_date.dayofweek == 0 else 0
+    features['is_friday'] = 1 if current_date.dayofweek == 4 else 0
+    features['month'] = current_date.month
+    features['week_of_year'] = current_date.isocalendar()[1]
+
+    return features
+
+
+def create_swing_samples(ticker: str, daily_df: pd.DataFrame, weekly_df: pd.DataFrame) -> pd.DataFrame:
+    """Create labeled samples for swing trade model."""
+    samples = []
+
+    for idx in range(30, len(daily_df) - MEDIUM_SWING_DAYS):
+        features = calculate_swing_features(daily_df, weekly_df, idx)
+        if features is None:
+            continue
+
+        current_close = daily_df.iloc[idx]['close']
+
+        # Target A: Price higher in 5 days?
+        future_close_5d = daily_df.iloc[idx + SHORT_SWING_DAYS]['close']
+        features['target_5d'] = 1 if future_close_5d > current_close else 0
+
+        # Target B: Price higher in 10 days?
+        future_close_10d = daily_df.iloc[idx + MEDIUM_SWING_DAYS]['close']
+        features['target_10d'] = 1 if future_close_10d > current_close else 0
+
+        # Store date for reference
+        features['date'] = daily_df.index[idx]
+
+        samples.append(features)
+
+    return pd.DataFrame(samples)
+
+
+def train_ensemble(X_train, y_train, X_test, y_test, name, ticker='SPY'):
+    """Train optimized ensemble for swing trades.
+
+    Uses ExtraTrees, XGBoost, LightGBM, LogisticReg ensemble for all tickers.
+    """
+    models = {
+        'et': ExtraTreesClassifier(
+            n_estimators=200, max_depth=8, min_samples_leaf=15,
+            random_state=RANDOM_STATE, n_jobs=-1
+        ),
+        'xgb': XGBClassifier(
+            n_estimators=200, max_depth=5, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8,
+            random_state=RANDOM_STATE, verbosity=0
+        ),
+        'lgbm': LGBMClassifier(
+            n_estimators=200, max_depth=5, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8,
+            random_state=RANDOM_STATE, verbosity=-1
+        ),
+        'lr': LogisticRegression(
+            C=1.0, max_iter=1000, random_state=RANDOM_STATE
+        )
+    }
+
+    results = {}
+    for model_name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        prec = precision_score(y_test, y_pred, zero_division=0)
+        rec = recall_score(y_test, y_pred, zero_division=0)
+        results[model_name] = {'model': model, 'accuracy': acc, 'precision': prec, 'recall': rec}
+        print(f"      {model_name}: {acc:.1%}")
+
+    # Weighted ensemble based on accuracy
+    total_acc = sum(r['accuracy'] for r in results.values())
+    weights = {n: r['accuracy'] / total_acc for n, r in results.items()}
+
+    # Ensemble prediction
+    y_prob = np.zeros(len(y_test))
+    for n, r in results.items():
+        y_prob += r['model'].predict_proba(X_test)[:, 1] * weights[n]
+
+    y_pred_ensemble = (y_prob > 0.5).astype(int)
+    ensemble_acc = accuracy_score(y_test, y_pred_ensemble)
+    ensemble_prec = precision_score(y_test, y_pred_ensemble, zero_division=0)
+    ensemble_rec = recall_score(y_test, y_pred_ensemble, zero_division=0)
+
+    print(f"    → {name} Ensemble: Acc={ensemble_acc:.1%}, Prec={ensemble_prec:.1%}, Rec={ensemble_rec:.1%}")
+
+    return {n: r['model'] for n, r in results.items()}, weights, ensemble_acc
+
+
+def train_swing_model(ticker: str):
+    """Train swing trade model for a ticker."""
+    print(f"\n{'='*70}")
+    print(f"  SWING V6 MODEL: {ticker}")
+    print(f"{'='*70}")
+
+    # Fetch data
+    daily_df = fetch_daily_data(ticker, TRAIN_START, TEST_END)
+    weekly_df = fetch_weekly_data(ticker, TRAIN_START, TEST_END)
+
+    if len(daily_df) < 100:
+        print(f"  ERROR: Insufficient data for {ticker}")
+        return None
+
+    # Create samples
+    print(f"  Creating swing samples...")
+    samples_df = create_swing_samples(ticker, daily_df, weekly_df)
+    print(f"    Total samples: {len(samples_df)}")
+
+    # Split train/test
+    train_end = pd.to_datetime(TRAIN_END)
+    test_start = pd.to_datetime(TEST_START)
+
+    train_df = samples_df[samples_df['date'] < train_end]
+    test_df = samples_df[samples_df['date'] >= test_start]
+
+    print(f"    Train: {len(train_df)}, Test: {len(test_df)}")
+
+    # Feature columns
+    feature_cols = [c for c in samples_df.columns if c not in ['target_5d', 'target_10d', 'date', 'current_price']]
+
+    X_train = train_df[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
+    X_test = test_df[feature_cols].replace([np.inf, -np.inf], 0).fillna(0)
+
+    # Scalers
+    scaler = RobustScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+
+    # Train models for both targets
+    print(f"\n  --- Target A: 5-Day Direction ---")
+    y_train_5d = train_df['target_5d']
+    y_test_5d = test_df['target_5d']
+    models_5d, weights_5d, acc_5d = train_ensemble(
+        X_train_scaled, y_train_5d, X_test_scaled, y_test_5d, "5-Day", ticker
+    )
+
+    print(f"\n  --- Target B: 10-Day Direction ---")
+    y_train_10d = train_df['target_10d']
+    y_test_10d = test_df['target_10d']
+    models_10d, weights_10d, acc_10d = train_ensemble(
+        X_train_scaled, y_train_10d, X_test_scaled, y_test_10d, "10-Day", ticker
+    )
+
+    # Save model
+    model_data = {
+        'ticker': ticker,
+        'version': 'v6_swing',
+        'trained_at': datetime.now().isoformat(),
+        'feature_cols': feature_cols,
+        'scaler': scaler,
+
+        # 5-day model
+        'models_5d': models_5d,
+        'weights_5d': weights_5d,
+        'acc_5d': acc_5d,
+
+        # 10-day model
+        'models_10d': models_10d,
+        'weights_10d': weights_10d,
+        'acc_10d': acc_10d,
+
+        'train_samples': len(train_df),
+        'test_samples': len(test_df),
+    }
+
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    model_path = os.path.join(MODELS_DIR, f'{ticker.lower()}_swing_v6.pkl')
+    with open(model_path, 'wb') as f:
+        pickle.dump(model_data, f)
+
+    print(f"\n  Model saved to {model_path}")
+
+    return {
+        'acc_5d': acc_5d,
+        'acc_10d': acc_10d
+    }
+
+
+def main():
+    """Main training pipeline."""
+    print("="*70)
+    print("  V6 SWING TRADE MODEL TRAINING")
+    print("="*70)
+    print(f"\n  Train period: {TRAIN_START} to {TRAIN_END}")
+    print(f"  Test period:  {TEST_START} to {TEST_END}")
+    print(f"\n  Targets:")
+    print(f"    - 5-Day Direction (short swing)")
+    print(f"    - 10-Day Direction (medium swing)")
+
+    results = {}
+    for ticker in SWING_TICKERS:
+        result = train_swing_model(ticker)
+        if result:
+            results[ticker] = result
+
+    # Summary
+    print("\n" + "="*70)
+    print("  TRAINING COMPLETE")
+    print("="*70)
+    print(f"\n  {'Ticker':<8} {'5-Day Acc':>12} {'10-Day Acc':>12}")
+    print(f"  {'-'*36}")
+    for ticker, r in results.items():
+        print(f"  {ticker:<8} {r['acc_5d']:>11.1%} {r['acc_10d']:>11.1%}")
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,401 @@
+/* Trading Metrics Styles - Mathematical Precision */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.headerDesktop {
+  composes: header;
+  margin-bottom: var(--space-3);
+}
+
+.headerMobile {
+  composes: header;
+  margin-bottom: var(--space-2);
+}
+
+.symbolSection {
+  display: flex;
+  flex-direction: column;
+}
+
+.symbolRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.symbolRowDesktop {
+  composes: symbolRow;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.symbolRowMobile {
+  composes: symbolRow;
+  gap: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.symbol {
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.symbolDesktop {
+  composes: symbol;
+  font-size: var(--text-5xl);
+  letter-spacing: 0.1em;
+  font-weight: 900;
+}
+
+.symbolMobile {
+  composes: symbol;
+  font-size: var(--text-4xl);
+  letter-spacing: 0.1em;
+  font-weight: 900;
+}
+
+.actionBadge {
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actionBadgeDesktop {
+  composes: actionBadge;
+  font-size: var(--text-2xl);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-xl);
+  font-weight: 900;
+}
+
+.actionBadgeMobile {
+  composes: actionBadge;
+  font-size: var(--text-xl);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-weight: 900;
+}
+
+.actionBuyNow {
+  background-color: #10b981;
+  animation: pulse 2s infinite;
+}
+
+.actionSellNow {
+  background-color: #ef4444;
+  animation: pulse 2s infinite;
+}
+
+.actionExit {
+  background-color: #dc2626;
+  animation: pulse 2s infinite;
+}
+
+.actionHold {
+  background-color: #3b82f6;
+}
+
+.actionWait {
+  background-color: #6b7280;
+}
+
+.price {
+  font-weight: 300;
+  color: #d1d5db;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.priceDesktop {
+  composes: price;
+  font-size: var(--text-4xl);
+  font-weight: 500;
+}
+
+.priceMobile {
+  composes: price;
+  font-size: var(--text-3xl);
+  font-weight: 500;
+}
+
+.priceChange {
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.priceChangeDesktop {
+  composes: priceChange;
+  font-size: var(--text-2xl);
+  margin-top: var(--space-3);
+}
+
+.priceChangeMobile {
+  composes: priceChange;
+  font-size: var(--text-xl);
+  margin-top: var(--space-2);
+}
+
+.priceChangePositive {
+  color: #10b981;
+}
+
+.priceChangeNegative {
+  color: #ef4444;
+}
+
+.urgencySection {
+  text-align: right;
+}
+
+.urgency {
+  font-weight: 700;
+}
+
+.urgencyDesktop {
+  composes: urgency;
+  font-size: var(--text-2xl);
+}
+
+.urgencyMobile {
+  composes: urgency;
+  font-size: var(--text-lg);
+}
+
+.urgencyImmediate {
+  color: #ef4444;
+  animation: pulse 2s infinite;
+}
+
+.urgencySoon {
+  color: #f59e0b;
+}
+
+.urgencyWatch {
+  color: #3b82f6;
+}
+
+.urgencyLow {
+  color: #6b7280;
+}
+
+.timer {
+  margin-top: 0.5rem;
+}
+
+.timerDesktop {
+  composes: timer;
+  margin-top: 0.5rem;
+}
+
+.timerMobile {
+  composes: timer;
+  margin-top: 0.25rem;
+}
+
+.timerLabel {
+  color: #6b7280;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.timerValue {
+  font-family: monospace;
+  color: #f59e0b;
+}
+
+.timerValueDesktop {
+  composes: timerValue;
+  font-size: var(--text-xl);
+}
+
+.timerValueMobile {
+  composes: timerValue;
+  font-size: var(--text-lg);
+}
+
+.timeToAction {
+  margin-top: 0.5rem;
+  color: #6b7280;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.timeToActionDesktop {
+  composes: timeToAction;
+  margin-top: 0.5rem;
+}
+
+.timeToActionMobile {
+  composes: timeToAction;
+  margin-top: 0.25rem;
+}
+
+.keyLevels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  margin-bottom: 0.75rem;
+}
+
+.keyLevelsDesktop {
+  composes: keyLevels;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.keyLevelsMobile {
+  composes: keyLevels;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.keyLevel {
+  display: flex;
+  flex-direction: column;
+}
+
+.keyLevelLabel {
+  color: #6b7280;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.keyLevelValue {
+  font-weight: 700;
+}
+
+.keyLevelValueDesktop {
+  composes: keyLevelValue;
+  font-size: var(--text-xl);
+}
+
+.keyLevelValueMobile {
+  composes: keyLevelValue;
+  font-size: var(--text-lg);
+}
+
+.keyLevelTarget {
+  color: #10b981;
+}
+
+.keyLevelSell {
+  color: #f59e0b;
+}
+
+.keyLevelStop {
+  color: #ef4444;
+}
+
+.keyLevelTime {
+  color: #06b6d4;
+}
+
+.confidence {
+  flex-shrink: 0;
+}
+
+.confidenceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.confidenceLabel {
+  color: #6b7280;
+}
+
+.confidenceLabelDesktop {
+  composes: confidenceLabel;
+  font-size: var(--text-base);
+}
+
+.confidenceLabelMobile {
+  composes: confidenceLabel;
+  font-size: var(--text-sm);
+}
+
+.confidenceValue {
+  color: white;
+  font-weight: 700;
+}
+
+.confidenceValueDesktop {
+  composes: confidenceValue;
+  font-size: var(--text-lg);
+}
+
+.confidenceValueMobile {
+  composes: confidenceValue;
+  font-size: var(--text-base);
+}
+
+.confidenceBar {
+  width: 100%;
+  background-color: #374151;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.confidenceBarDesktop {
+  composes: confidenceBar;
+  height: 1.5rem;
+}
+
+.confidenceBarMobile {
+  composes: confidenceBar;
+  height: 1.25rem;
+}
+
+.confidenceFill {
+  height: 100%;
+  transition: width 1s ease;
+}
+
+.confidenceFillStrongBuy {
+  composes: confidenceFill;
+  background: linear-gradient(to right, #059669, #10b981);
+}
+
+.confidenceFillBuy {
+  composes: confidenceFill;
+  background: linear-gradient(to right, #10b981, #34d399);
+}
+
+.confidenceFillNeutral {
+  composes: confidenceFill;
+  background: linear-gradient(to right, #d97706, #f59e0b);
+}
+
+.confidenceFillSell {
+  composes: confidenceFill;
+  background: linear-gradient(to right, #dc2626, #ef4444);
+}
+
+.confidenceFillStrongSell {
+  composes: confidenceFill;
+  background: linear-gradient(to right, #b91c1c, #dc2626);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
