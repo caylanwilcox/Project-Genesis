@@ -95,13 +95,20 @@ class ProbabilityCalibrator:
     def calibrate_binary(
         self,
         target: str,
-        probabilities: np.ndarray
+        probabilities: np.ndarray,
+        clip_min: float = 0.02,
+        clip_max: float = 0.98
     ) -> np.ndarray:
-        """Apply calibration to binary probabilities"""
+        """
+        Apply calibration to binary probabilities
+
+        Clips to [clip_min, clip_max] to avoid overconfident 0%/100% predictions
+        """
         if target not in self.calibrators:
             raise ValueError(f"No calibrator found for {target}")
 
-        return self.calibrators[target].predict(probabilities)
+        calibrated = self.calibrators[target].predict(probabilities)
+        return np.clip(calibrated, clip_min, clip_max)
 
     def calibrate_multiclass(
         self,

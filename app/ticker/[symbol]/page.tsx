@@ -19,6 +19,7 @@ import {
 import { detectFvgPatterns } from '@/components/ProfessionalChart/fvgDrawing'
 import type { V6Prediction } from '@/components/ProfessionalChart/types'
 import { ModelCarousel } from '@/components/ModelCarousel'
+import { TickerSignalCard, type V6Signal, type NorthstarData } from '@/components/TickerSignalCard'
 import { getFvgGapSettingsForTimeframe } from '@/utils/fvgThresholdPolicy'
 import { aggregateBarsToDuration, INTRADAY_TIMEFRAMES, mergeCandlesReplacing, TIMEFRAME_IN_MS } from '@/hooks/polygonRealtimeUtils'
 import { generateFvgSignals, getBestSignal, FvgStrategySignal } from '@/services/fvgStrategyService'
@@ -108,6 +109,13 @@ export default function TickerPage() {
   const [v6Prediction, setV6Prediction] = useState<V6Prediction | null>(null)
   const [showMLOverlay, setShowMLOverlay] = useState(true)
   const [mlPrediction, setMlPrediction] = useState<MLPrediction | null>(null)
+  const [northstarData, setNorthstarData] = useState<NorthstarData | null>(null)
+  const [v6Signal, setV6Signal] = useState<V6Signal | null>(null)
+  const [tradingSession, setTradingSession] = useState<'early' | 'late'>('early')
+  const [todayOpen, setTodayOpen] = useState<number>(0)
+  const [price11am, setPrice11am] = useState<number | null>(null)
+  const [barsAnalyzed, setBarsAnalyzed] = useState<number>(0)
+  const [isLoadingSignals, setIsLoadingSignals] = useState(true)
   const fvgGapSettings = useMemo(() => getFvgGapSettingsForTimeframe(timeframe), [timeframe])
   const fvgDisplayPrecision = useMemo(() => (fvgGapSettings.step < 0.1 ? 2 : 1), [fvgGapSettings.step])
   const formatFvgPercent = (value: number, precision = value < 1 ? 2 : 1) => value.toFixed(precision)
@@ -180,46 +188,80 @@ export default function TickerPage() {
     }
   }, [isPolygonLoading, isLoadingMoreData])
 
-  // Fetch V6 ML prediction for this ticker
+  // Fetch V6 ML prediction and Northstar data for this ticker
   useEffect(() => {
     if (!symbol) return
 
-    const fetchV6Prediction = async () => {
+    const fetchSignals = async () => {
+      setIsLoadingSignals(true)
       try {
-        const res = await fetch('/api/v2/trading-directions')
-        if (!res.ok) return
+        // Fetch trading directions for V6 signal
+        const tradingRes = await fetch('/api/v2/trading-directions')
+        if (tradingRes.ok) {
+          const tradingData = await tradingRes.json()
+          const tickerData = tradingData.tickers?.[symbol.toUpperCase()]
 
-        const data = await res.json()
-        const tickerData = data.tickers?.[symbol.toUpperCase()]
+          if (tickerData) {
+            // Set session
+            setTradingSession(tickerData.session || 'early')
+            setTodayOpen(tickerData.today_open || 0)
+            setPrice11am(tickerData.price_11am || null)
+            setBarsAnalyzed(tickerData.bars_analyzed || 0)
 
-        if (tickerData && tickerData.action) {
-          // Map API response to V6Prediction interface
-          const direction = tickerData.action === 'BUY_CALL'
-            ? 'BULLISH'
-            : tickerData.action === 'BUY_PUT'
-              ? 'BEARISH'
-              : 'NEUTRAL'
+            // Map to V6Signal for TickerSignalCard
+            const action = tickerData.action === 'BUY_CALL' ? 'LONG'
+              : tickerData.action === 'BUY_PUT' ? 'SHORT'
+              : 'NO_TRADE'
 
-          const activeProb = tickerData.probability || 0.5
-          const confidence = Math.round(Math.abs(activeProb - 0.5) * 200) // 0-100 scale
+            setV6Signal({
+              action: action as 'LONG' | 'SHORT' | 'NO_TRADE',
+              reason: tickerData.reason || '',
+              probability_a: tickerData.probability_a || tickerData.target_a_prob || 0.5,
+              probability_b: tickerData.probability_b || tickerData.target_b_prob || 0.5,
+              session: tickerData.session || 'early',
+              price_11am: tickerData.price_11am || null,
+            })
 
-          setV6Prediction({
-            direction: direction as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
-            probability_a: tickerData.target_a_prob || activeProb,
-            probability_b: tickerData.target_b_prob || activeProb,
-            confidence,
-            session: tickerData.session || 'early',
-            action: tickerData.action as 'BUY_CALL' | 'BUY_PUT' | 'NO_TRADE',
-          })
+            // Map API response to V6Prediction interface for chart overlay
+            const direction = tickerData.action === 'BUY_CALL'
+              ? 'BULLISH'
+              : tickerData.action === 'BUY_PUT'
+                ? 'BEARISH'
+                : 'NEUTRAL'
+
+            const activeProb = tickerData.probability || 0.5
+            const confidence = Math.round(Math.abs(activeProb - 0.5) * 200) // 0-100 scale
+
+            setV6Prediction({
+              direction: direction as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+              probability_a: tickerData.target_a_prob || activeProb,
+              probability_b: tickerData.target_b_prob || activeProb,
+              confidence,
+              session: tickerData.session || 'early',
+              action: tickerData.action as 'BUY_CALL' | 'BUY_PUT' | 'NO_TRADE',
+            })
+          }
+        }
+
+        // Fetch Northstar data
+        const northstarRes = await fetch(`/api/v2/northstar?ticker=${symbol.toUpperCase()}`)
+        if (northstarRes.ok) {
+          const northstarResult = await northstarRes.json()
+          const nsData = northstarResult.tickers?.[symbol.toUpperCase()]?.northstar
+          if (nsData) {
+            setNorthstarData(nsData)
+          }
         }
       } catch (err) {
-        console.error('[V6Prediction] Failed to fetch:', err)
+        console.error('[Signals] Failed to fetch:', err)
+      } finally {
+        setIsLoadingSignals(false)
       }
     }
 
-    fetchV6Prediction()
+    fetchSignals()
     // Refresh every 60 seconds
-    const interval = setInterval(fetchV6Prediction, 60000)
+    const interval = setInterval(fetchSignals, 60000)
     return () => clearInterval(interval)
   }, [symbol])
 
@@ -1078,14 +1120,57 @@ export default function TickerPage() {
         </div>
       </section>
 
-      {/* Model Carousel - Intraday/Swing Multi-Timeframe View */}
+      {/* ML Signal Card - Matching Replay Mode Layout */}
       <section className="bg-gray-900 border-b border-gray-800 p-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm text-gray-400 font-semibold tracking-wider">ML MODEL PREDICTIONS</h3>
-            <span className="text-xs text-cyan-400">V6 Intraday + Swing</span>
+            <h3 className="text-sm text-gray-400 font-semibold tracking-wider">ML SIGNAL & NORTHSTAR</h3>
+            <span className={`text-xs px-2 py-1 rounded ${
+              tradingSession === 'late'
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              {tradingSession === 'late' ? 'Peak Accuracy Session' : 'Early Session'}
+            </span>
           </div>
-          <ModelCarousel ticker={symbol?.toUpperCase() || 'SPY'} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Signal Card */}
+            {v6Signal ? (
+              <TickerSignalCard
+                symbol={symbol?.toUpperCase() || ''}
+                currentPrice={livePrice}
+                todayOpen={todayOpen || livePrice}
+                todayChangePct={ticker?.changePercent || 0}
+                barsAnalyzed={barsAnalyzed || polygonData.length}
+                v6={v6Signal}
+                northstar={northstarData}
+                session={tradingSession}
+                isLoading={isLoadingSignals}
+              />
+            ) : (
+              <div className="border rounded-xl p-5 bg-gray-900/40 border-gray-700">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">{symbol?.toUpperCase()}</h2>
+                    <div className="text-gray-500 text-sm mt-1">
+                      {isLoadingSignals ? 'Loading ML signals...' : 'ML signals unavailable'}
+                    </div>
+                  </div>
+                </div>
+                {isLoadingSignals && (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-24 bg-gray-800/50 rounded-lg"></div>
+                    <div className="h-16 bg-gray-800/50 rounded-lg"></div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Model Carousel */}
+            <div>
+              <ModelCarousel ticker={symbol?.toUpperCase() || 'SPY'} />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1258,12 +1343,21 @@ export default function TickerPage() {
             <div className="flex items-center gap-2 mb-4">
               <div className="w-2 h-2 bg-red-400 rounded-full"></div>
               <h3 className="text-red-400 font-semibold uppercase text-sm tracking-wider">
-                Risk Management {fvgSignal ? '(FVG)' : '(Est.)'}
+                Risk Management {mlPrediction ? '(ML)' : fvgSignal ? '(FVG)' : '(Est.)'}
               </h3>
             </div>
             <div className="space-y-4">
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                <div className="text-gray-400 text-xs font-medium mb-1">Stop Loss</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-gray-400 text-xs font-medium mb-1">Stop Loss</div>
+                  {mlPrediction && (
+                    <span className="text-red-400 text-xs font-bold">
+                      {Math.round((mlPrediction.recommendation?.bias === 'SHORT'
+                        ? mlPrediction.probabilities?.short?.touch_sl
+                        : mlPrediction.probabilities?.long?.touch_sl) * 100)}% risk
+                    </span>
+                  )}
+                </div>
                 <div className="text-lg sm:text-xl font-bold text-red-400">${chartStopLoss.toFixed(2)}</div>
                 <div className="text-xs text-gray-500 mt-1">
                   {chartEntryPoint > 0 ? `${(((chartStopLoss - chartEntryPoint) / chartEntryPoint) * 100).toFixed(1)}% from entry` : '--'}
@@ -1276,8 +1370,14 @@ export default function TickerPage() {
               </div>
               <div className="bg-gray-800/50 rounded-lg p-3">
                 <div className="text-gray-400 text-xs font-medium mb-1">Signal Confidence</div>
-                <div className="text-lg sm:text-xl font-bold">{fvgSignal ? `${fvgSignal.confidence.toFixed(0)}%` : '--'}</div>
-                <div className="text-xs text-gray-500 mt-1">{fvgSignal ? fvgSignal.strength : 'No FVG signal'}</div>
+                <div className="text-lg sm:text-xl font-bold">
+                  {mlPrediction ? `${Math.round(mlPrediction.recommendation?.confidence * 100)}%` :
+                   fvgSignal ? `${fvgSignal.confidence.toFixed(0)}%` : '--'}
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {mlPrediction ? `ML: ${mlPrediction.recommendation?.bias}` :
+                   fvgSignal ? fvgSignal.strength : 'No signal'}
+                </div>
               </div>
             </div>
           </article>

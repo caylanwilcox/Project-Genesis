@@ -263,16 +263,14 @@ class PlanGenerator:
         else:
             multiclass_probs = np.ones(len(FIRST_TOUCH_CLASSES)) / len(FIRST_TOUCH_CLASSES)
 
-        # Calibrate probabilities
+        # Use raw model probabilities (already calibrated to base rates)
         calibrated_probs = {}
         for target in TARGET_LABELS:
-            if target in raw_probs and target in self.calibrator.calibrators:
-                calibrated_probs[target] = self.calibrator.calibrate_binary(
-                    target,
-                    np.array([raw_probs[target]])
-                )[0]
+            if target in raw_probs:
+                # Clip to avoid extreme 0%/100%
+                calibrated_probs[target] = np.clip(raw_probs[target], 0.01, 0.95)
             else:
-                calibrated_probs[target] = raw_probs.get(target, 0.5)
+                calibrated_probs[target] = 0.3
 
         # Calibrate multiclass
         if self.calibrator.multiclass_calibrators:
