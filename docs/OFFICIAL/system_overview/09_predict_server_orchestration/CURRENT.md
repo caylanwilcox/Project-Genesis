@@ -250,9 +250,64 @@ response = {
 |---------|-------|
 | Runtime | Python 3.12 |
 | Build Command | `pip install -r requirements.txt` |
-| Start Command | `python predict_server.py` |
-| Port | 5000 (auto-detected) |
+| Start Command | `gunicorn server.app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2` |
+| Port | Auto-detected via `$PORT` |
 | Environment | `POLYGON_API_KEY`, `MODEL_VERSION` |
+| Production URL | `https://genesis-production-c1e9.up.railway.app` |
+
+### Server Architecture (Updated 2026-01-08)
+
+The ML server has been upgraded from a monolithic `predict_server.py` to a modular architecture:
+
+```
+ml/
+├── Procfile                    # Railway entry: server.app:app
+├── requirements.txt            # Dependencies (includes catboost, joblib)
+└── server/
+    ├── app.py                  # Flask app factory (main entry)
+    ├── config.py               # Environment configuration
+    ├── models/
+    │   ├── loader.py           # Model loading at startup
+    │   └── store.py            # Model storage
+    ├── routes/
+    │   ├── health.py           # /health endpoint
+    │   ├── predictions.py      # /trading_directions endpoint
+    │   ├── signals.py          # /daily-signals, /signal-breakdown
+    │   └── analysis.py         # /northstar, /mtf, /rpe endpoints
+    ├── v6/
+    │   ├── features.py         # V6 feature engineering
+    │   ├── predictions.py      # Intraday predictions
+    │   └── swing_predictions.py # Swing (multi-day) predictions
+    └── data/
+        ├── polygon.py          # Polygon API client
+        └── market.py           # Market data helpers
+```
+
+### Key API Endpoints
+
+| Endpoint | Purpose | Notes |
+|----------|---------|-------|
+| `/trading_directions` | Main V6 signals | Primary production endpoint |
+| `/northstar` | Intraday phase pipeline | Northstar phases 1-4 |
+| `/mtf` | Multi-timeframe analysis | **Includes swing data** |
+| `/daily-signals` | Batch multi-ticker | All tickers at once |
+| `/health` | Server health | Model status |
+
+### Frontend API Routing
+
+The Next.js frontend routes through proxy endpoints:
+
+```
+Frontend               Next.js API            Railway ML Server
+─────────              ──────────             ─────────────────
+/api/v2/northstar  →   route.ts          →   /mtf (preferred) or /northstar (fallback)
+/api/v2/trading-directions → route.ts   →   /trading_directions
+```
+
+**Fallback Strategy (northstar route.ts):**
+1. Try `/mtf` endpoint first (has swing data)
+2. If `/mtf` fails or 404, fall back to `/northstar` (intraday only)
+3. Transform response to consistent format for frontend
 
 ### Health Check
 
@@ -274,13 +329,31 @@ Response:
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Flask server | ✅ Production | Railway deployment |
-| /trading-directions | ✅ Production | Primary endpoint |
-| /daily-signals | ✅ Production | Batch endpoint |
+| Modular Flask server | ✅ Production | Railway deployment via `server.app:app` |
+| /trading_directions | ✅ Production | Primary V6 endpoint |
+| /northstar | ✅ Production | Intraday phase pipeline |
+| /mtf | ✅ Production | Multi-timeframe with swing data |
+| /daily-signals | ✅ Production | Batch multi-ticker |
 | /replay | ✅ Production | Historical replay |
 | /rpe | ✅ Production | RPE-only output |
+| /health | ✅ Production | Server health check |
 | Signal caching | ✅ Production | 1-hour lock |
+| V6 Intraday models | ✅ Production | SPY, QQQ, IWM |
+| V6.1 Swing models | ✅ Production | 1-day, 3-day, 5-day, 10-day |
 | Spec version | ✅ Production | In all responses |
+
+### Deployment Commands
+
+```bash
+# Local development
+cd ml && python -m server.app
+
+# Railway deployment (automatic via Procfile)
+# Procfile: web: gunicorn server.app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2
+
+# Manual redeploy on Railway (if needed)
+railway up
+```
 
 ---
 
