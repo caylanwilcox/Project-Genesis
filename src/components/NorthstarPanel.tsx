@@ -2,6 +2,103 @@
 
 import { useState, useEffect } from 'react'
 
+// ========================
+// TOOLTIP DEFINITIONS - Beginner-friendly explanations
+// ========================
+
+const TOOLTIPS = {
+  // Phase names
+  phase1: "TRUTH: What is the market actually doing right now? This phase reads the raw price action to determine if buyers or sellers are in control.",
+  phase2: "HEALTH GATE: Is this a good quality setup? Checks if the current market conditions are stable enough to trade.",
+  phase3: "DENSITY: How crowded is this trade? Controls how many signals we take to avoid overtrading.",
+  phase4: "EXECUTION: Should you trade? The final yes/no decision with specific entry guidance.",
+
+  // Phase 1 signals
+  direction_UP: "BULLISH: Buyers are in control. Price is making higher highs and higher lows.",
+  direction_DOWN: "BEARISH: Sellers are in control. Price is making lower highs and lower lows.",
+  direction_BALANCED: "CHOPPY: Neither side has control. Price is moving sideways - best to wait.",
+
+  confidence_STRUCTURAL_EDGE: "STRONG EDGE: Clear market structure with high probability setup. Good conditions to trade.",
+  confidence_CONTEXT_ONLY: "WEAK EDGE: Some direction visible but not ideal. Trade with caution or reduced size.",
+  confidence_NO_TRADE: "NO EDGE: Market is unclear or too risky. Stay on the sidelines.",
+
+  acceptance: "ACCEPTANCE: Has price 'accepted' the current level? If buyers keep price above a level, they've accepted it as support.",
+  acceptance_STRONG: "STRONG: Price is firmly holding this level with conviction. Good sign.",
+  acceptance_MODERATE: "MODERATE: Price is holding but with some back-and-forth. Decent sign.",
+  acceptance_WEAK: "WEAK: Price is barely holding. Could break at any moment.",
+
+  range_TREND: "TRENDING: Price is moving in a clear direction. Great for momentum trades.",
+  range_BALANCE: "RANGING: Price is stuck between two levels. Wait for a breakout or trade the range.",
+  range_FAILED_EXPANSION: "FAILED MOVE: Price tried to break out but got rejected. Often signals reversal.",
+
+  mtf: "MULTI-TIMEFRAME: Are different timeframes (5min, 15min, 1hr) agreeing on direction?",
+  mtf_aligned: "ALIGNED: All timeframes agree - stronger signal.",
+  mtf_conflict: "CONFLICT: Timeframes disagree - be careful, signal is weaker.",
+
+  conviction_HIGH: "HIGH CONVICTION: Strong volume confirming the move. Institutions are likely involved.",
+  conviction_MEDIUM: "MEDIUM CONVICTION: Decent volume but not exceptional. Proceed normally.",
+  conviction_LOW: "LOW CONVICTION: Weak volume. The move might not have staying power.",
+
+  effort_result: "EFFORT vs RESULT: Is the price movement matching the volume? Big volume should mean big moves.",
+
+  failure: "FAILURE PATTERNS: Has price failed to do what it 'should' have done? Failed breakouts often reverse.",
+
+  // Phase 2 signals
+  health_HEALTHY: "HEALTHY: All conditions look good. Green light for trading.",
+  health_DEGRADED: "DEGRADED: Some concerns but tradeable. Consider smaller position size.",
+  health_UNSTABLE: "UNSTABLE: Too many warning signs. Best to wait for conditions to improve.",
+
+  structural_integrity: "STRUCTURE: How clean is the price pattern? Higher = cleaner chart.",
+  time_persistence: "TIME: Has the signal lasted long enough to be meaningful?",
+  volatility_alignment: "VOLATILITY: Is current volatility normal? Extreme volatility can be risky.",
+  participation_consistency: "PARTICIPATION: Is volume consistent with the move?",
+  failure_risk: "FAILURE RISK: How likely is this setup to fail? Lower = safer.",
+
+  // Phase 3 signals
+  throttle_OPEN: "OPEN: Full trading allowed. Take signals as they come.",
+  throttle_LIMITED: "LIMITED: Restrict to best setups only. Be selective.",
+  throttle_BLOCKED: "BLOCKED: No new trades. Wait for reset.",
+
+  density: "SIGNAL DENSITY: How many good setups have we seen recently? Too many = be more selective.",
+
+  // Phase 4 signals
+  allowed: "TRADE ALLOWED: All checks passed. You have permission to execute.",
+  denied: "TRADE DENIED: One or more checks failed. Do not trade this setup.",
+
+  bias_LONG: "LONG BIAS: Look for buying opportunities (calls). Price expected to go up.",
+  bias_SHORT: "SHORT BIAS: Look for selling opportunities (puts). Price expected to go down.",
+  bias_NEUTRAL: "NEUTRAL: No clear direction. Wait for clarity.",
+
+  mode_TREND_CONTINUATION: "TREND FOLLOWING: Trade in the direction of the trend. Buy dips in uptrends.",
+  mode_MEAN_REVERSION: "MEAN REVERSION: Price has moved too far, expect a pullback. Counter-trend trade.",
+  mode_SCALP: "QUICK SCALP: Fast in-and-out trade. Take small profits quickly.",
+  mode_NO_TRADE: "NO TRADE: Conditions don't support any strategy right now.",
+
+  risk_NORMAL: "NORMAL RISK: Standard position size. Conditions are good.",
+  risk_REDUCED: "REDUCED RISK: Use half your normal size. Some uncertainty present.",
+  risk_DEFENSIVE: "DEFENSIVE: Use quarter size or skip. High uncertainty.",
+
+  // Key Levels
+  pivot: "PIVOT: The central price level. Price above = bullish, below = bearish.",
+  pivot_r1: "RESISTANCE 1 (R1): First major ceiling. Price often struggles here.",
+  pivot_s1: "SUPPORT 1 (S1): First major floor. Price often bounces here.",
+  recent_high: "RECENT HIGH: The highest price in the last few days. Breaking above = bullish.",
+  recent_low: "RECENT LOW: The lowest price in the last few days. Breaking below = bearish.",
+}
+
+// Tooltip component
+function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group cursor-help">
+      {children}
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 border border-gray-600 text-gray-200 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-normal w-64 z-50 shadow-lg">
+        {text}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800"></span>
+      </span>
+    </span>
+  )
+}
+
 // Key Levels type for support/resistance
 interface KeyLevels {
   recent_high: number
@@ -96,20 +193,22 @@ interface TickerAnalysis {
 
 interface NorthstarData {
   generated_at: string
-  current_time_et: string
-  current_hour: number
-  market_open: boolean
-  tickers: Record<string, TickerAnalysis>
-  pipeline_version: string
-  summary: {
-    execution_allowed: boolean
-    allowed_tickers: Array<{
+  current_time_et?: string
+  current_hour?: number
+  market_open?: boolean
+  tickers: Record<string, TickerAnalysis | any>
+  pipeline_version?: string
+  session?: string
+  analysis_type?: string
+  summary?: {
+    execution_allowed?: boolean
+    allowed_tickers?: Array<{
       ticker: string
       bias: string
       mode: string
       risk: string
     }>
-    recommendation: string
+    recommendation?: string
   }
 }
 
@@ -129,7 +228,62 @@ export function NorthstarPanel() {
         if (result.error) {
           setError(result.error)
         } else {
-          setData(result)
+          // Transform MTF response format to expected Northstar format
+          // MTF returns: { tickers: { SPY: { northstar: {...}, swing: {...} } } }
+          // We need: { tickers: { SPY: { phase1, phase2, phase3, phase4, ... } } }
+          const transformed: NorthstarData = {
+            generated_at: result.generated_at || new Date().toISOString(),
+            current_time_et: result.current_time_et || new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' }),
+            tickers: {},
+            pipeline_version: result.pipeline_version || '2.0',
+            session: result.session,
+          }
+
+          // Process each ticker
+          if (result.tickers) {
+            for (const [symbol, tickerData] of Object.entries(result.tickers)) {
+              const td = tickerData as any
+              // If it has northstar property (from MTF), extract it
+              if (td.northstar) {
+                transformed.tickers[symbol] = {
+                  ...td.northstar,
+                  symbol,
+                  current_price: td.current_price || td.northstar?.phase1?.key_levels?.current_price || 0,
+                  today_change_pct: 0,
+                  bars_analyzed: 0,
+                }
+              } else if (td.phase1) {
+                // Already in correct format
+                transformed.tickers[symbol] = td
+              }
+            }
+          }
+
+          // Build summary from ticker data
+          const allowedTickers: Array<{ ticker: string; bias: string; mode: string; risk: string }> = []
+          let anyAllowed = false
+          for (const [sym, td] of Object.entries(transformed.tickers)) {
+            const tickerInfo = td as any
+            if (tickerInfo?.phase4?.allowed) {
+              anyAllowed = true
+              allowedTickers.push({
+                ticker: sym,
+                bias: tickerInfo.phase4.bias || 'NEUTRAL',
+                mode: tickerInfo.phase4.execution_mode || 'STANDARD',
+                risk: tickerInfo.phase4.risk_state || 'NORMAL',
+              })
+            }
+          }
+
+          transformed.summary = {
+            execution_allowed: anyAllowed,
+            allowed_tickers: allowedTickers,
+            recommendation: anyAllowed
+              ? `Trade signals available for ${allowedTickers.map(t => t.ticker).join(', ')}`
+              : 'No clear setups - wait for better conditions',
+          }
+
+          setData(transformed)
           setError(null)
         }
       } catch (err) {
@@ -205,11 +359,13 @@ export function NorthstarPanel() {
           <div>
             <h3 className="text-white font-semibold flex items-center gap-2">
               <span className="text-purple-400">Northstar</span> Phase Pipeline
-              <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">
-                v{data.pipeline_version}
-              </span>
+              {data.pipeline_version && (
+                <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">
+                  v{data.pipeline_version}
+                </span>
+              )}
             </h3>
-            <p className="text-gray-400 text-xs mt-0.5">{data.current_time_et}</p>
+            <p className="text-gray-400 text-xs mt-0.5">{data.current_time_et || data.session || 'Live'}</p>
           </div>
           <div className="flex gap-2">
             {Object.keys(data.tickers).map((ticker) => (
@@ -230,20 +386,22 @@ export function NorthstarPanel() {
       </div>
 
       {/* Summary Banner */}
-      <div className={`px-4 py-2 border-b border-gray-800 ${
-        data.summary.execution_allowed ? 'bg-green-900/20' : 'bg-red-900/20'
-      }`}>
-        <div className="flex items-center justify-between">
-          <span className={`text-sm font-medium ${
-            data.summary.execution_allowed ? 'text-green-400' : 'text-red-400'
-          }`}>
-            {data.summary.execution_allowed ? 'EXECUTION ALLOWED' : 'STAND DOWN'}
-          </span>
-          <span className="text-gray-400 text-sm">{data.summary.recommendation}</span>
+      {data.summary && (
+        <div className={`px-4 py-2 border-b border-gray-800 ${
+          data.summary.execution_allowed ? 'bg-green-900/20' : 'bg-red-900/20'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-sm font-medium ${
+              data.summary.execution_allowed ? 'text-green-400' : 'text-red-400'
+            }`}>
+              {data.summary.execution_allowed ? 'EXECUTION ALLOWED' : 'STAND DOWN'}
+            </span>
+            <span className="text-gray-400 text-sm">{data.summary.recommendation || ''}</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {tickerData && !tickerData.error && (
+      {tickerData && !tickerData.error && tickerData.phase1 && (
         <div className="p-4">
           {/* Price Info with Clickable Ticker */}
           <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-800">
@@ -282,18 +440,24 @@ export function NorthstarPanel() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500 text-xs font-mono">P1</span>
-                  <span className="text-white font-medium">TRUTH</span>
-                  <span className={`text-sm ${getDirectionColor(tickerData.phase1.direction)}`}>
-                    {getDirectionIcon(tickerData.phase1.direction)} {tickerData.phase1.direction}
-                  </span>
+                  <Tooltip text={TOOLTIPS.phase1}>
+                    <span className="text-white font-medium border-b border-dashed border-gray-600">TRUTH</span>
+                  </Tooltip>
+                  <Tooltip text={TOOLTIPS[`direction_${tickerData.phase1.direction}` as keyof typeof TOOLTIPS] || ''}>
+                    <span className={`text-sm ${getDirectionColor(tickerData.phase1.direction)} border-b border-dashed border-gray-600`}>
+                      {getDirectionIcon(tickerData.phase1.direction)} {tickerData.phase1.direction}
+                    </span>
+                  </Tooltip>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  tickerData.phase1.confidence_band === 'STRUCTURAL_EDGE' ? 'bg-green-500/20 text-green-400' :
-                  tickerData.phase1.confidence_band === 'CONTEXT_ONLY' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {tickerData.phase1.confidence_band.replace('_', ' ')}
-                </span>
+                <Tooltip text={TOOLTIPS[`confidence_${tickerData.phase1.confidence_band}` as keyof typeof TOOLTIPS] || ''}>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium border-b border-dashed border-transparent hover:border-gray-500 ${
+                    tickerData.phase1.confidence_band === 'STRUCTURAL_EDGE' ? 'bg-green-500/20 text-green-400' :
+                    tickerData.phase1.confidence_band === 'CONTEXT_ONLY' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {tickerData.phase1.confidence_band.replace('_', ' ')}
+                  </span>
+                </Tooltip>
               </div>
 
               {expandedPhase === 1 && (
@@ -301,12 +465,16 @@ export function NorthstarPanel() {
                   {/* Acceptance Details */}
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${tickerData.phase1.acceptance.accepted ? 'bg-green-500' : 'bg-red-500'}`} />
-                    <span className="text-gray-400">Acceptance:</span>
-                    <span className={tickerData.phase1.acceptance.accepted ? 'text-green-400' : 'text-red-400'}>
-                      {tickerData.phase1.acceptance.accepted
-                        ? `YES - ${tickerData.phase1.acceptance.acceptance_strength}`
-                        : 'NO'}
-                    </span>
+                    <Tooltip text={TOOLTIPS.acceptance}>
+                      <span className="text-gray-400 border-b border-dashed border-gray-600">Acceptance:</span>
+                    </Tooltip>
+                    <Tooltip text={TOOLTIPS[`acceptance_${tickerData.phase1.acceptance.acceptance_strength}` as keyof typeof TOOLTIPS] || ''}>
+                      <span className={tickerData.phase1.acceptance.accepted ? 'text-green-400' : 'text-red-400'}>
+                        {tickerData.phase1.acceptance.accepted
+                          ? `YES - ${tickerData.phase1.acceptance.acceptance_strength}`
+                          : 'NO'}
+                      </span>
+                    </Tooltip>
                   </div>
 
                   {/* Acceptance Reason - WHY */}
@@ -330,25 +498,31 @@ export function NorthstarPanel() {
                       tickerData.phase1.range.state === 'BALANCE' ? 'bg-yellow-500' : 'bg-red-500'
                     }`} />
                     <span className="text-gray-400">Range:</span>
-                    <span className={
-                      tickerData.phase1.range.state === 'TREND' ? 'text-green-400' :
-                      tickerData.phase1.range.state === 'BALANCE' ? 'text-yellow-400' : 'text-red-400'
-                    }>
-                      {tickerData.phase1.range.state}
-                      {tickerData.phase1.range.expansion_quality !== 'NONE' && ` (${tickerData.phase1.range.expansion_quality})`}
-                      {tickerData.phase1.range.rotation_complete && ' - Rotation complete'}
-                    </span>
+                    <Tooltip text={TOOLTIPS[`range_${tickerData.phase1.range.state}` as keyof typeof TOOLTIPS] || ''}>
+                      <span className={`border-b border-dashed border-gray-600 ${
+                        tickerData.phase1.range.state === 'TREND' ? 'text-green-400' :
+                        tickerData.phase1.range.state === 'BALANCE' ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {tickerData.phase1.range.state}
+                        {tickerData.phase1.range.expansion_quality !== 'NONE' && ` (${tickerData.phase1.range.expansion_quality})`}
+                        {tickerData.phase1.range.rotation_complete && ' - Rotation complete'}
+                      </span>
+                    </Tooltip>
                   </div>
 
                   {/* MTF Alignment */}
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${tickerData.phase1.mtf.aligned ? 'bg-green-500' : 'bg-red-500'}`} />
-                    <span className="text-gray-400">MTF:</span>
-                    <span className={tickerData.phase1.mtf.aligned ? 'text-green-400' : 'text-red-400'}>
-                      {tickerData.phase1.mtf.aligned
-                        ? `ALIGNED - ${tickerData.phase1.mtf.dominant_tf} dominant`
-                        : `CONFLICT - ${tickerData.phase1.mtf.conflict_tf || 'Timeframes disagree'}`}
-                    </span>
+                    <Tooltip text={TOOLTIPS.mtf}>
+                      <span className="text-gray-400 border-b border-dashed border-gray-600">MTF:</span>
+                    </Tooltip>
+                    <Tooltip text={tickerData.phase1.mtf.aligned ? TOOLTIPS.mtf_aligned : TOOLTIPS.mtf_conflict}>
+                      <span className={`border-b border-dashed border-gray-600 ${tickerData.phase1.mtf.aligned ? 'text-green-400' : 'text-red-400'}`}>
+                        {tickerData.phase1.mtf.aligned
+                          ? `ALIGNED - ${tickerData.phase1.mtf.dominant_tf} dominant`
+                          : `CONFLICT - ${tickerData.phase1.mtf.conflict_tf || 'Timeframes disagree'}`}
+                      </span>
+                    </Tooltip>
                   </div>
 
                   {/* Participation */}
@@ -358,21 +532,25 @@ export function NorthstarPanel() {
                       tickerData.phase1.participation.conviction === 'MEDIUM' ? 'bg-yellow-500' : 'bg-red-500'
                     }`} />
                     <span className="text-gray-400">Conviction:</span>
-                    <span className={
-                      tickerData.phase1.participation.conviction === 'HIGH' ? 'text-green-400' :
-                      tickerData.phase1.participation.conviction === 'MEDIUM' ? 'text-yellow-400' : 'text-red-400'
-                    }>
-                      {tickerData.phase1.participation.conviction}
-                      {!tickerData.phase1.participation.effort_result_match && ' ⚠ Effort/result mismatch'}
-                    </span>
+                    <Tooltip text={TOOLTIPS[`conviction_${tickerData.phase1.participation.conviction}` as keyof typeof TOOLTIPS] || ''}>
+                      <span className={`border-b border-dashed border-gray-600 ${
+                        tickerData.phase1.participation.conviction === 'HIGH' ? 'text-green-400' :
+                        tickerData.phase1.participation.conviction === 'MEDIUM' ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {tickerData.phase1.participation.conviction}
+                        {!tickerData.phase1.participation.effort_result_match && ' ⚠ Effort/result mismatch'}
+                      </span>
+                    </Tooltip>
                   </div>
 
                   {/* Failure Patterns */}
                   {tickerData.phase1.failure.present && (
-                    <div className="text-red-400 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-red-500" />
-                      FAILURE: {tickerData.phase1.failure.failure_types.join(', ')}
-                    </div>
+                    <Tooltip text={TOOLTIPS.failure}>
+                      <div className="text-red-400 flex items-center gap-2 cursor-help">
+                        <span className="w-2 h-2 rounded-full bg-red-500" />
+                        FAILURE: {tickerData.phase1.failure.failure_types.join(', ')}
+                      </div>
+                    </Tooltip>
                   )}
                 </div>
               )}
@@ -391,9 +569,15 @@ export function NorthstarPanel() {
                     <span className="text-blue-400 text-xs font-medium">KEY LEVELS</span>
                   </div>
                   <div className="flex gap-3 text-xs">
-                    <span><span className="text-red-400">R1:</span> <span className="text-white font-mono">${tickerData.phase1.key_levels.pivot_r1?.toFixed(2)}</span></span>
-                    <span><span className="text-yellow-400">P:</span> <span className="text-white font-mono">${tickerData.phase1.key_levels.pivot?.toFixed(2)}</span></span>
-                    <span><span className="text-green-400">S1:</span> <span className="text-white font-mono">${tickerData.phase1.key_levels.pivot_s1?.toFixed(2)}</span></span>
+                    <Tooltip text={TOOLTIPS.pivot_r1}>
+                      <span><span className="text-red-400 border-b border-dashed border-red-400/50">R1:</span> <span className="text-white font-mono">${tickerData.phase1.key_levels.pivot_r1?.toFixed(2)}</span></span>
+                    </Tooltip>
+                    <Tooltip text={TOOLTIPS.pivot}>
+                      <span><span className="text-yellow-400 border-b border-dashed border-yellow-400/50">P:</span> <span className="text-white font-mono">${tickerData.phase1.key_levels.pivot?.toFixed(2)}</span></span>
+                    </Tooltip>
+                    <Tooltip text={TOOLTIPS.pivot_s1}>
+                      <span><span className="text-green-400 border-b border-dashed border-green-400/50">S1:</span> <span className="text-white font-mono">${tickerData.phase1.key_levels.pivot_s1?.toFixed(2)}</span></span>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -558,28 +742,34 @@ export function NorthstarPanel() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500 text-xs font-mono">P2</span>
-                  <span className="text-white font-medium">HEALTH GATE</span>
+                  <Tooltip text={TOOLTIPS.phase2}>
+                    <span className="text-white font-medium border-b border-dashed border-gray-600">HEALTH GATE</span>
+                  </Tooltip>
                   <span className="text-gray-400 text-sm">{tickerData.phase2.health_score}%</span>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  tickerData.phase2.tier === 'HEALTHY' ? 'bg-green-500/20 text-green-400' :
-                  tickerData.phase2.tier === 'DEGRADED' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {tickerData.phase2.tier}
-                </span>
+                <Tooltip text={TOOLTIPS[`health_${tickerData.phase2.tier}` as keyof typeof TOOLTIPS] || ''}>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium border-b border-dashed border-transparent hover:border-gray-500 ${
+                    tickerData.phase2.tier === 'HEALTHY' ? 'bg-green-500/20 text-green-400' :
+                    tickerData.phase2.tier === 'DEGRADED' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {tickerData.phase2.tier}
+                  </span>
+                </Tooltip>
               </div>
 
               {expandedPhase === 2 && (
                 <div className="mt-3 pt-3 border-t border-gray-700 text-xs">
                   <div className="grid grid-cols-5 gap-2 mb-2">
                     {Object.entries(tickerData.phase2.dimensions).map(([key, value]) => (
-                      <div key={key} className="text-center">
-                        <div className="text-gray-500 text-[10px]">{key.replace('_', ' ').slice(0, 8)}</div>
-                        <div className={`font-mono ${value >= 75 ? 'text-green-400' : value >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                          {value}
+                      <Tooltip key={key} text={TOOLTIPS[key as keyof typeof TOOLTIPS] || `${key.replace(/_/g, ' ')}: Score out of 100`}>
+                        <div className="text-center cursor-help">
+                          <div className="text-gray-500 text-[10px] border-b border-dashed border-gray-600">{key.replace('_', ' ').slice(0, 8)}</div>
+                          <div className={`font-mono ${value >= 75 ? 'text-green-400' : value >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                            {value}
+                          </div>
                         </div>
-                      </div>
+                      </Tooltip>
                     ))}
                   </div>
                   {tickerData.phase2.reasons.length > 0 && (
@@ -601,16 +791,22 @@ export function NorthstarPanel() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500 text-xs font-mono">P3</span>
-                  <span className="text-white font-medium">DENSITY</span>
-                  <span className="text-gray-400 text-sm">{tickerData.phase3.density_score}%</span>
+                  <Tooltip text={TOOLTIPS.phase3}>
+                    <span className="text-white font-medium border-b border-dashed border-gray-600">DENSITY</span>
+                  </Tooltip>
+                  <Tooltip text={TOOLTIPS.density}>
+                    <span className="text-gray-400 text-sm border-b border-dashed border-gray-600">{tickerData.phase3.density_score}%</span>
+                  </Tooltip>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  tickerData.phase3.throttle === 'OPEN' ? 'bg-green-500/20 text-green-400' :
-                  tickerData.phase3.throttle === 'LIMITED' ? 'bg-yellow-500/20 text-yellow-400' :
-                  'bg-red-500/20 text-red-400'
-                }`}>
-                  {tickerData.phase3.throttle}
-                </span>
+                <Tooltip text={TOOLTIPS[`throttle_${tickerData.phase3.throttle}` as keyof typeof TOOLTIPS] || ''}>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium border-b border-dashed border-transparent hover:border-gray-500 ${
+                    tickerData.phase3.throttle === 'OPEN' ? 'bg-green-500/20 text-green-400' :
+                    tickerData.phase3.throttle === 'LIMITED' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-red-500/20 text-red-400'
+                  }`}>
+                    {tickerData.phase3.throttle}
+                  </span>
+                </Tooltip>
               </div>
 
               {expandedPhase === 3 && (
@@ -638,36 +834,46 @@ export function NorthstarPanel() {
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-gray-500 text-xs font-mono">P4</span>
-                  <span className="text-white font-medium">EXECUTION</span>
+                  <Tooltip text={TOOLTIPS.phase4}>
+                    <span className="text-white font-medium border-b border-dashed border-gray-600">EXECUTION</span>
+                  </Tooltip>
                   {tickerData.phase4.bias !== 'NEUTRAL' && (
-                    <span className={`text-sm font-bold ${
-                      tickerData.phase4.bias === 'LONG' ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {tickerData.phase4.bias}
-                    </span>
+                    <Tooltip text={TOOLTIPS[`bias_${tickerData.phase4.bias}` as keyof typeof TOOLTIPS] || ''}>
+                      <span className={`text-sm font-bold border-b border-dashed border-gray-600 ${
+                        tickerData.phase4.bias === 'LONG' ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {tickerData.phase4.bias}
+                      </span>
+                    </Tooltip>
                   )}
                 </div>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  tickerData.phase4.allowed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                }`}>
-                  {tickerData.phase4.allowed ? 'ALLOWED' : 'DENIED'}
-                </span>
+                <Tooltip text={tickerData.phase4.allowed ? TOOLTIPS.allowed : TOOLTIPS.denied}>
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium border-b border-dashed border-transparent hover:border-gray-500 ${
+                    tickerData.phase4.allowed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                  }`}>
+                    {tickerData.phase4.allowed ? 'ALLOWED' : 'DENIED'}
+                  </span>
+                </Tooltip>
               </div>
 
               {expandedPhase === 4 && (
                 <div className="mt-3 pt-3 border-t border-gray-700 grid grid-cols-2 gap-3 text-xs">
                   <div>
                     <div className="text-gray-500">Mode</div>
-                    <div className="text-white">{tickerData.phase4.execution_mode.replace('_', ' ')}</div>
+                    <Tooltip text={TOOLTIPS[`mode_${tickerData.phase4.execution_mode}` as keyof typeof TOOLTIPS] || `${tickerData.phase4.execution_mode}: Trading mode based on current conditions`}>
+                      <div className="text-white cursor-help border-b border-dashed border-gray-600 inline-block">{tickerData.phase4.execution_mode.replace('_', ' ')}</div>
+                    </Tooltip>
                   </div>
                   <div>
                     <div className="text-gray-500">Risk State</div>
-                    <div className={`${
-                      tickerData.phase4.risk_state === 'NORMAL' ? 'text-green-400' :
-                      tickerData.phase4.risk_state === 'REDUCED' ? 'text-yellow-400' : 'text-red-400'
-                    }`}>
-                      {tickerData.phase4.risk_state}
-                    </div>
+                    <Tooltip text={TOOLTIPS[`risk_${tickerData.phase4.risk_state}` as keyof typeof TOOLTIPS] || ''}>
+                      <div className={`cursor-help border-b border-dashed border-gray-600 inline-block ${
+                        tickerData.phase4.risk_state === 'NORMAL' ? 'text-green-400' :
+                        tickerData.phase4.risk_state === 'REDUCED' ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {tickerData.phase4.risk_state}
+                      </div>
+                    </Tooltip>
                   </div>
                   {tickerData.phase4.invalidation_context.length > 0 && (
                     <div className="col-span-2">

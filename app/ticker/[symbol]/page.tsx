@@ -20,6 +20,7 @@ import { detectFvgPatterns } from '@/components/ProfessionalChart/fvgDrawing'
 import type { V6Prediction } from '@/components/ProfessionalChart/types'
 import { ModelCarousel } from '@/components/ModelCarousel'
 import { TickerSignalCard, type V6Signal, type NorthstarData } from '@/components/TickerSignalCard'
+import { SwingRecommendation, type SwingData } from '@/components/SwingRecommendation'
 import { getFvgGapSettingsForTimeframe } from '@/utils/fvgThresholdPolicy'
 import { aggregateBarsToDuration, INTRADAY_TIMEFRAMES, mergeCandlesReplacing, TIMEFRAME_IN_MS } from '@/hooks/polygonRealtimeUtils'
 import { generateFvgSignals, getBestSignal, FvgStrategySignal } from '@/services/fvgStrategyService'
@@ -116,6 +117,7 @@ export default function TickerPage() {
   const [price11am, setPrice11am] = useState<number | null>(null)
   const [barsAnalyzed, setBarsAnalyzed] = useState<number>(0)
   const [isLoadingSignals, setIsLoadingSignals] = useState(true)
+  const [swingData, setSwingData] = useState<SwingData | null>(null)
   const fvgGapSettings = useMemo(() => getFvgGapSettingsForTimeframe(timeframe), [timeframe])
   const fvgDisplayPrecision = useMemo(() => (fvgGapSettings.step < 0.1 ? 2 : 1), [fvgGapSettings.step])
   const formatFvgPercent = (value: number, precision = value < 1 ? 2 : 1) => value.toFixed(precision)
@@ -192,69 +194,105 @@ export default function TickerPage() {
   useEffect(() => {
     if (!symbol) return
 
+    // Determine session based on current ET time
+    const getCurrentSession = (): 'early' | 'late' => {
+      const now = new Date()
+      const etTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      return etTime.getHours() >= 12 ? 'late' : 'early'
+    }
+
     const fetchSignals = async () => {
       setIsLoadingSignals(true)
+      let mlServerAvailable = false
+
       try {
         // Fetch trading directions for V6 signal
         const tradingRes = await fetch('/api/v2/trading-directions')
         if (tradingRes.ok) {
           const tradingData = await tradingRes.json()
-          const tickerData = tradingData.tickers?.[symbol.toUpperCase()]
 
-          if (tickerData) {
-            // Set session
-            setTradingSession(tickerData.session || 'early')
-            setTodayOpen(tickerData.today_open || 0)
-            setPrice11am(tickerData.price_11am || null)
-            setBarsAnalyzed(tickerData.bars_analyzed || 0)
+          // Check if ML server returned an error
+          if (tradingData.error) {
+            console.warn('[Signals] ML server error:', tradingData.error)
+          } else {
+            const tickerData = tradingData.tickers?.[symbol.toUpperCase()]
 
-            // Map to V6Signal for TickerSignalCard
-            const action = tickerData.action === 'BUY_CALL' ? 'LONG'
-              : tickerData.action === 'BUY_PUT' ? 'SHORT'
-              : 'NO_TRADE'
+            if (tickerData && !tickerData.error) {
+              mlServerAvailable = true
+              // Set session
+              setTradingSession(tickerData.session || 'early')
+              setTodayOpen(tickerData.today_open || 0)
+              setPrice11am(tickerData.price_11am || null)
+              setBarsAnalyzed(tickerData.bars_analyzed || 0)
 
-            setV6Signal({
-              action: action as 'LONG' | 'SHORT' | 'NO_TRADE',
-              reason: tickerData.reason || '',
-              probability_a: tickerData.probability_a || tickerData.target_a_prob || 0.5,
-              probability_b: tickerData.probability_b || tickerData.target_b_prob || 0.5,
-              session: tickerData.session || 'early',
-              price_11am: tickerData.price_11am || null,
-            })
+              // Map to V6Signal for TickerSignalCard
+              const action = tickerData.action === 'BUY_CALL' ? 'LONG'
+                : tickerData.action === 'BUY_PUT' ? 'SHORT'
+                : 'NO_TRADE'
 
-            // Map API response to V6Prediction interface for chart overlay
-            const direction = tickerData.action === 'BUY_CALL'
-              ? 'BULLISH'
-              : tickerData.action === 'BUY_PUT'
-                ? 'BEARISH'
-                : 'NEUTRAL'
+              setV6Signal({
+                action: action as 'LONG' | 'SHORT' | 'NO_TRADE',
+                reason: tickerData.reason || '',
+                probability_a: tickerData.probability_a || tickerData.target_a_prob || 0.5,
+                probability_b: tickerData.probability_b || tickerData.target_b_prob || 0.5,
+                session: tickerData.session || 'early',
+                price_11am: tickerData.price_11am || null,
+              })
 
-            const activeProb = tickerData.probability || 0.5
-            const confidence = Math.round(Math.abs(activeProb - 0.5) * 200) // 0-100 scale
+              // Map API response to V6Prediction interface for chart overlay
+              const direction = tickerData.action === 'BUY_CALL'
+                ? 'BULLISH'
+                : tickerData.action === 'BUY_PUT'
+                  ? 'BEARISH'
+                  : 'NEUTRAL'
 
-            setV6Prediction({
-              direction: direction as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
-              probability_a: tickerData.target_a_prob || activeProb,
-              probability_b: tickerData.target_b_prob || activeProb,
-              confidence,
-              session: tickerData.session || 'early',
-              action: tickerData.action as 'BUY_CALL' | 'BUY_PUT' | 'NO_TRADE',
-            })
+              const activeProb = tickerData.probability || 0.5
+              const confidence = Math.round(Math.abs(activeProb - 0.5) * 200) // 0-100 scale
+
+              setV6Prediction({
+                direction: direction as 'BULLISH' | 'BEARISH' | 'NEUTRAL',
+                probability_a: tickerData.target_a_prob || activeProb,
+                probability_b: tickerData.target_b_prob || activeProb,
+                confidence,
+                session: tickerData.session || 'early',
+                action: tickerData.action as 'BUY_CALL' | 'BUY_PUT' | 'NO_TRADE',
+              })
+            }
           }
         }
 
-        // Fetch Northstar data
-        const northstarRes = await fetch(`/api/v2/northstar?ticker=${symbol.toUpperCase()}`)
-        if (northstarRes.ok) {
-          const northstarResult = await northstarRes.json()
-          const nsData = northstarResult.tickers?.[symbol.toUpperCase()]?.northstar
-          if (nsData) {
-            setNorthstarData(nsData)
+        // Fetch Northstar and Swing data from MTF endpoint
+        const mtfRes = await fetch(`/api/v2/northstar?ticker=${symbol.toUpperCase()}`)
+        if (mtfRes.ok) {
+          const mtfResult = await mtfRes.json()
+          if (!mtfResult.error) {
+            const tickerMtf = mtfResult.tickers?.[symbol.toUpperCase()]
+            // Northstar (intraday) data
+            if (tickerMtf?.northstar) {
+              setNorthstarData(tickerMtf.northstar)
+            }
+            // Swing data
+            if (tickerMtf?.swing) {
+              setSwingData(tickerMtf.swing)
+            }
           }
         }
       } catch (err) {
         console.error('[Signals] Failed to fetch:', err)
       } finally {
+        // If ML server unavailable, set fallback signal with neutral values
+        if (!mlServerAvailable) {
+          const currentSession = getCurrentSession()
+          setTradingSession(currentSession)
+          setV6Signal(prev => prev || {
+            action: 'NO_TRADE',
+            reason: 'ML server unavailable - signals will update when connected',
+            probability_a: 0.5,
+            probability_b: 0.5,
+            session: currentSession,
+            price_11am: null,
+          })
+        }
         setIsLoadingSignals(false)
       }
     }
@@ -1119,6 +1157,26 @@ export default function TickerPage() {
           )}
         </div>
       </section>
+
+      {/* AI Trading Recommendation */}
+      {swingData && (
+        <section className="bg-gray-900 border-b border-gray-800 p-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm text-gray-400 font-semibold tracking-wider">AI TRADING RECOMMENDATION</h3>
+              <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400">
+                Swing + Intraday Analysis
+              </span>
+            </div>
+            <SwingRecommendation
+              symbol={symbol?.toUpperCase() || ''}
+              swingData={swingData}
+              intradayBias={northstarData?.phase4?.bias}
+              intradayExecutionMode={northstarData?.phase4?.execution_mode}
+            />
+          </div>
+        </section>
+      )}
 
       {/* ML Signal Card - Matching Replay Mode Layout */}
       <section className="bg-gray-900 border-b border-gray-800 p-4">

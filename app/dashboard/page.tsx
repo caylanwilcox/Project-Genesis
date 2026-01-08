@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useMultiTickerData } from '@/hooks/useMultiTickerData'
 import { NorthstarPanel } from '@/components/NorthstarPanel'
 import { ModelCarousel } from '@/components/ModelCarousel'
+import { SwingRecommendation, type SwingData } from '@/components/SwingRecommendation'
 import { polygonWebSocketService, Trade } from '@/services/polygonWebSocket'
 
 interface TickerDirection {
@@ -129,6 +130,8 @@ export default function Dashboard() {
   const [lockedSignals, setLockedSignals] = useState<LockedSignals>({})
   const [livePrices, setLivePrices] = useState<Map<string, LivePriceData>>(new Map())
   const [wsConnected, setWsConnected] = useState(false)
+  const [swingDataMap, setSwingDataMap] = useState<Map<string, SwingData>>(new Map())
+  const [intradayDataMap, setIntradayDataMap] = useState<Map<string, any>>(new Map())
 
   // Get current hour in ET for signal locking
   const getCurrentHourET = () => {
@@ -179,6 +182,34 @@ export default function Dashboard() {
 
     fetchDirections()
     const interval = setInterval(fetchDirections, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Fetch swing and intraday data for AI recommendations
+  useEffect(() => {
+    const fetchSwingData = async () => {
+      try {
+        // Fetch for each symbol
+        for (const symbol of SYMBOLS) {
+          const response = await fetch(`/api/v2/northstar?ticker=${symbol}`)
+          if (response.ok) {
+            const data = await response.json()
+            const tickerData = data.tickers?.[symbol]
+            if (tickerData?.swing) {
+              setSwingDataMap(prev => new Map(prev).set(symbol, tickerData.swing))
+            }
+            if (tickerData?.northstar) {
+              setIntradayDataMap(prev => new Map(prev).set(symbol, tickerData.northstar))
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch swing data:', err)
+      }
+    }
+
+    fetchSwingData()
+    const interval = setInterval(fetchSwingData, 60000)
     return () => clearInterval(interval)
   }, [])
 
@@ -624,6 +655,36 @@ export default function Dashboard() {
         <ModelCarousel ticker="QQQ" />
         <ModelCarousel ticker="IWM" />
       </div>
+
+      {/* AI Trading Recommendations */}
+      {swingDataMap.size > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">AI Trading Recommendations</h3>
+            <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400">
+              Swing + Intraday Analysis
+            </span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {['SPY', 'QQQ', 'IWM'].map(symbol => {
+              const swingData = swingDataMap.get(symbol)
+              const intradayData = intradayDataMap.get(symbol)
+              if (!swingData) return null
+              return (
+                <div key={symbol}>
+                  <div className="text-sm font-medium text-gray-400 mb-2">{symbol}</div>
+                  <SwingRecommendation
+                    symbol={symbol}
+                    swingData={swingData}
+                    intradayBias={intradayData?.phase4?.bias}
+                    intradayExecutionMode={intradayData?.phase4?.execution_mode}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Northstar Phase Pipeline */}
       <div className="mt-6">
