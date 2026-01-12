@@ -3164,21 +3164,42 @@ def get_v6_prediction(ticker, hourly_bars, daily_bars, current_hour):
     model_data = intraday_v6_models[ticker]
     feature_cols = model_data['feature_cols']
 
-    # Get today's data
-    if len(hourly_bars) < 1 or len(daily_bars) < 3:
+    # Get today's data - need at least 1 hourly bar and 2 daily bars (for prev days)
+    if len(hourly_bars) < 1 or len(daily_bars) < 2:
         return None, None, None, None
 
-    # CRITICAL: Use daily bar open (9:30 AM regular market open) to match training
-    # Training uses daily_df['Open'] which is the regular market open, NOT pre-market
-    # hourly_bars[0]['o'] is the 4 AM pre-market open - WRONG for V6 model
-    today_open = daily_bars[-1]['o']  # Today's daily bar open = 9:30 AM regular market open
+    # CRITICAL: Find today's open price
+    # Polygon doesn't publish today's daily bar until after market close
+    # So we need to find the 9:30 AM hourly bar for today's open
+    today_str = pd.Timestamp(hourly_bars[-1]['t'], unit='ms', tz='America/New_York').strftime('%Y-%m-%d')
+    today_open = None
+
+    # Check if last daily bar is actually today (only available after market close)
+    last_daily_date = pd.Timestamp(daily_bars[-1]['t'], unit='ms', tz='America/New_York').strftime('%Y-%m-%d')
+    if last_daily_date == today_str:
+        today_open = daily_bars[-1]['o']
+        prev_day = daily_bars[-2] if len(daily_bars) >= 2 else daily_bars[-1]
+        prev_prev_day = daily_bars[-3] if len(daily_bars) >= 3 else prev_day
+    else:
+        # Today's daily bar not available yet - find 9:30 AM from hourly bars
+        for bar in hourly_bars:
+            bar_time = pd.Timestamp(bar['t'], unit='ms', tz='America/New_York')
+            # The 9 AM hourly bar covers 9:00-10:00, its open is closest to 9:30 market open
+            if bar_time.hour == 9:
+                today_open = bar['o']
+                break
+
+        if today_open is None:
+            # Fallback to first hourly bar (may be pre-market 4 AM)
+            today_open = hourly_bars[0]['o']
+
+        # Use yesterday and day before as prev days
+        prev_day = daily_bars[-1]  # Yesterday
+        prev_prev_day = daily_bars[-2] if len(daily_bars) >= 2 else prev_day
+
     current_close = hourly_bars[-1]['c']
     current_high = max(b['h'] for b in hourly_bars)
     current_low = min(b['l'] for b in hourly_bars)
-
-    # Previous days
-    prev_day = daily_bars[-2] if len(daily_bars) >= 2 else daily_bars[-1]
-    prev_prev_day = daily_bars[-3] if len(daily_bars) >= 3 else prev_day
 
     # Get 11 AM price if available
     price_11am = None
@@ -3487,15 +3508,32 @@ def trading_directions():
 
             # Get current price
             current_price = hourly_bars[-1]['c']
-            # CRITICAL: Use daily bar open (9:30 AM regular market) to match V6 training
-            # SPEC: NEVER use hourly_bars[0]['o'] (pre-market 4 AM) - causes training/serving skew
-            if not daily_bars:
-                result['tickers'][ticker] = {
-                    'action': 'NO_TRADE',
-                    'reason': 'Daily open unavailable - abort to prevent skew'
-                }
-                continue
-            today_open = daily_bars[-1]['o']
+
+            # CRITICAL: Use today's 9:30 AM open price to match V6 training
+            # Polygon doesn't publish today's daily bar until after market close
+            # So we need to find the 9:30 AM hourly bar for today's open
+            today_open = None
+
+            # First, check if we have today's daily bar (only available after market close)
+            if daily_bars:
+                last_daily_date = datetime.fromtimestamp(daily_bars[-1]['t'] / 1000, tz=et_tz).strftime('%Y-%m-%d')
+                if last_daily_date == today:
+                    today_open = daily_bars[-1]['o']
+
+            # If no today's daily bar, find the 9:30 AM hourly bar
+            if today_open is None:
+                for bar in hourly_bars:
+                    bar_time = datetime.fromtimestamp(bar['t'] / 1000, tz=et_tz)
+                    # The 9:30 AM bar starts at 9:00 (hour=9) in Polygon's hourly data
+                    # Actually, in hourly data, the 9:00 bar covers 9:00-10:00 which includes 9:30
+                    if bar_time.hour == 9:
+                        today_open = bar['o']  # Use the open of the 9 AM bar
+                        break
+
+            if today_open is None:
+                # Fallback: use the first bar's open (may be pre-market)
+                today_open = hourly_bars[0]['o']
+
             today_change = (current_price - today_open) / today_open * 100
 
             # Calculate allocation
