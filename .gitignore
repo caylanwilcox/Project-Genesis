@@ -35,7 +35,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-*.pkl
+# Keep v6_models/*.pkl for Railway deployment
+# *.pkl
+!ml/v6_models/*.pkl
 xDeprecated/
 __pycache__/
 *.pyc
