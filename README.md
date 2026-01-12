@@ -1,46 +1,165 @@
-# Getting Started with Create React App
+# Project Genesis - ML Trading Platform
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+An AI-powered trading analysis platform that provides real-time market predictions using machine learning models.
 
-## Available Scripts
+## Tech Stack
 
-In the project directory, you can run:
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| **Next.js 14** | React framework with App Router |
+| **TypeScript** | Type-safe development |
+| **Tailwind CSS** | Styling |
+| **Canvas API** | High-performance chart rendering |
 
-### `npm start`
+**Deployment:** [Vercel](https://vercel.com)
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Backend (ML Server)
+| Technology | Purpose |
+|------------|---------|
+| **Python 3.11** | Runtime |
+| **Flask** | REST API framework |
+| **Gunicorn** | WSGI HTTP server |
+| **scikit-learn** | ML model training |
+| **XGBoost** | Gradient boosting models |
+| **CatBoost** | Categorical boosting models |
+| **pandas/numpy** | Data processing |
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+**Deployment:** [Render](https://render.com)
 
-### `npm test`
+### Data
+| Service | Purpose |
+|---------|---------|
+| **Polygon.io** | Real-time & historical market data |
+| **Git LFS** | Large model file storage (~160MB) |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Architecture
 
-### `npm run build`
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    PROJECT GENESIS                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│   FRONTEND (Vercel)              ML BACKEND (Render)        │
+│   ┌──────────────────┐          ┌──────────────────┐       │
+│   │  Next.js App     │  ─────►  │  Flask ML Server │       │
+│   │  - Charts        │   API    │  - V6 Models     │       │
+│   │  - UI Components │  calls   │  - Predictions   │       │
+│   │  - Real-time data│          │  - Analysis      │       │
+│   └──────────────────┘          └──────────────────┘       │
+│           │                              │                  │
+│           ▼                              ▼                  │
+│   ┌──────────────────┐          ┌──────────────────┐       │
+│   │   Polygon.io     │          │   Git LFS        │       │
+│   │   Market Data    │          │   Model Storage  │       │
+│   └──────────────────┘          └──────────────────┘       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Production URLs
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+| Service | URL |
+|---------|-----|
+| **ML Backend** | `https://project-genesis-6roa.onrender.com` |
+| **Health Check** | `https://project-genesis-6roa.onrender.com/health` |
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## Environment Variables
 
-### `npm run eject`
+### Vercel (Frontend)
+```env
+NEXT_PUBLIC_ML_SERVER_URL=https://project-genesis-6roa.onrender.com
+ML_SERVER_URL=https://project-genesis-6roa.onrender.com
+NEXT_PUBLIC_POLYGON_API_KEY=your_polygon_api_key
+NEXT_PUBLIC_POLYGON_PLAN=advanced
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### Render (ML Backend)
+```env
+POLYGON_API_KEY=your_polygon_api_key
+PORT=10000
+```
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## ML Models
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+The platform uses V6 time-split models for predictions:
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+| Model | Tickers | Purpose |
+|-------|---------|---------|
+| **Intraday V6** | SPY, QQQ, IWM | Same-day directional predictions |
+| **Swing V6.1** | SPY, QQQ, IWM | 5-day and 10-day predictions |
+| **3-Day Swing** | SPY, QQQ, IWM | 3-day directional predictions |
+| **1-Day Swing** | SPY, QQQ, IWM | Next-day predictions |
 
-## Learn More
+Models are stored using Git LFS (~160MB total).
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Local Development
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### Frontend
+```bash
+npm install
+npm run dev
+```
+
+### ML Server
+```bash
+cd ml
+pip install -r requirements.txt
+python -m server.app
+```
+
+## API Endpoints
+
+### Health Check
+```
+GET /health
+```
+
+### Trading Directions
+```
+GET /trading_directions?ticker=SPY
+```
+
+### Northstar (Multi-timeframe)
+```
+GET /northstar?ticker=SPY
+```
+
+### MTF Analysis
+```
+GET /mtf?ticker=SPY
+```
+
+## Deployment
+
+### Frontend (Vercel)
+- Automatically deploys from `main` branch
+- Connected to GitHub repository
+
+### ML Backend (Render)
+- Automatically deploys from `main` branch
+- Root directory: `ml`
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn server.app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2`
+- Git LFS files are automatically pulled
+
+## Project Structure
+
+```
+mvp-trading-app/
+├── app/                    # Next.js App Router pages
+│   ├── api/               # API routes
+│   └── ticker/            # Dynamic ticker pages
+├── src/
+│   ├── components/        # React components
+│   │   └── ProfessionalChart/  # Canvas chart system
+│   └── services/          # API services
+├── ml/                    # Python ML backend
+│   ├── server/           # Flask application
+│   │   ├── app.py       # Main entry point
+│   │   ├── models/      # Model loading
+│   │   └── routes/      # API endpoints
+│   ├── v6_models/       # Trained ML models (Git LFS)
+│   └── requirements.txt # Python dependencies
+└── docs/                 # Documentation
+```
