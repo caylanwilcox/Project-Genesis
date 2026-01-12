@@ -116,6 +116,8 @@ Reference: hourly_bars[11:00]['c']  # ml/server/v6/features.py:42-46
 
 ## Feature Schema (29 Features)
 
+**IMPORTANT:** V6 models are self-describing. The `feature_cols` list is stored inside each model pickle file and loaded at runtime. This ensures training/serving alignment. See [predictions.py:31](ml/server/v6/predictions.py#L31).
+
 ### Gap & Previous Day (7 features)
 | Feature | Description | Evidence |
 |---------|-------------|----------|
@@ -157,21 +159,25 @@ Reference: hourly_bars[11:00]['c']  # ml/server/v6/features.py:42-46
 | `is_monday` | Monday effect | [features.py:90](ml/server/v6/features.py#L90) |
 | `is_friday` | Friday effect | [features.py:91](ml/server/v6/features.py#L91) |
 
+### Mean Reversion (1 feature)
+| Feature | Description | Evidence |
+|---------|-------------|----------|
+| `mean_reversion_signal` | Large gap → fade (-1/0/1) | [features.py:94](ml/server/v6/features.py#L94) |
+
 ### 11 AM Features (2 features - late session only)
 | Feature | Description | Evidence |
 |---------|-------------|----------|
 | `current_vs_11am` | (current - 11am) / 11am | [features.py:99](ml/server/v6/features.py#L99) |
 | `above_11am` | Binary: is current > 11am | [features.py:100](ml/server/v6/features.py#L100) |
 
-### Multi-Day Features (6 features)
+### Multi-Day Features (5 features)
 | Feature | Description | Evidence |
 |---------|-------------|----------|
 | `return_3d` | 3-day return | [features.py:107](ml/server/v6/features.py#L107) |
 | `return_5d` | 5-day return | [features.py:108](ml/server/v6/features.py#L108) |
 | `volatility_5d` | 5-day volatility | [features.py:110](ml/server/v6/features.py#L110) |
-| `mean_reversion_signal` | Large gap → fade | [features.py:94](ml/server/v6/features.py#L94) |
-| `consecutive_up` | Consecutive up days | [features.py:117-123](ml/server/v6/features.py#L117-L123) |
-| `consecutive_down` | Consecutive down days | [features.py:124-128](ml/server/v6/features.py#L124-L128) |
+| `consecutive_up` | Consecutive up days (max 3) | [features.py:117-123](ml/server/v6/features.py#L117-L123) |
+| `consecutive_down` | Consecutive down days (max 3) | [features.py:124-128](ml/server/v6/features.py#L124-L128) |
 
 ---
 
@@ -196,15 +202,17 @@ Reference: hourly_bars[11:00]['c']  # ml/server/v6/features.py:42-46
 |---------|-----------|----------------|------|
 | DS-1 | today_open = daily_bars[-1]['o'] | [predictions.py:37](ml/server/v6/predictions.py#L37) | test_ds1_today_open |
 | DS-4 | V6 expects exactly 29 features | [features.py](ml/server/v6/features.py) | test_ds4_feature_count |
-| FS-1 | Feature names match training | feature_cols constant | test_fs1_feature_names |
+| FS-1 | Feature names match training | feature_cols in pickle | test_fs1_feature_names |
 | SC-1 | hour < 11 → "early" | [predictions.py:52](ml/server/v6/predictions.py#L52) | test_sc1_early_session |
 | SC-2 | hour >= 11 → "late" | [predictions.py:60](ml/server/v6/predictions.py#L60) | test_sc2_late_session |
 | SC-3 | 11:00:00 is LATE | [predictions.py:52](ml/server/v6/predictions.py#L52) | test_sc3_boundary |
-| NZ-1 | prob > 0.55 → BULLISH | [predictions.py](ml/server/v6/predictions.py) | test_nz1 |
-| NZ-2 | prob < 0.45 → BEARISH | [predictions.py](ml/server/v6/predictions.py) | test_nz2 |
-| NZ-3-5 | 0.45 ≤ prob ≤ 0.55 → NO_TRADE | [predictions.py:145-156](ml/server/v6/predictions.py#L145-L156) | test_nz3-5 |
+| NZ-1 | prob > 0.75 → BULLISH | [predictions.py:188](ml/server/v6/predictions.py#L188) | test_nz1 |
+| NZ-2 | prob < 0.25 → BEARISH | [predictions.py:191](ml/server/v6/predictions.py#L191) | test_nz2 |
+| NZ-3 | 0.25 ≤ prob ≤ 0.75 → NO_TRADE | [predictions.py:156-168](ml/server/v6/predictions.py#L156-L168) | test_nz3 |
 | P5-3 | Phases 1-4 produce no ML predictions | RPE deterministic | test_p5_3 |
 | P5-4 | Phase 5 is ONLY ML layer | V6 exclusive | test_p5_4 |
+
+**Note:** Neutral zone was widened from 45-55% to 25-75% on 2026-01-03. Model accuracy is only reliable at extremes (>75% or <25%). See [config.py:35-38](ml/server/config.py#L35-L38).
 
 ---
 
@@ -216,9 +224,9 @@ Reference: hourly_bars[11:00]['c']  # ml/server/v6/features.py:42-46
 | Feature building | ✅ Production | ml/server/v6/features.py |
 | Session detection | ✅ Production | ml/server/v6/predictions.py |
 | Ensemble prediction | ✅ Production | ml/server/v6/predictions.py |
-| Neutral zone | ✅ Production | 45-55% threshold |
+| Neutral zone | ✅ Production | 25-75% threshold (widened 2026-01-03) |
 | Signal caching | ✅ Production | 1-hour lock |
-| Model files | ✅ Production | ml/models/{ticker}_time_split_v6.pkl |
+| Model files | ✅ Production | ml/v6_models/{ticker}_intraday_v6.pkl |
 
 ---
 

@@ -34,45 +34,52 @@ The Policy Engine is the **spinal cord** of the trading platform - it translates
 
 ## Action Translation Rules
 
-### Neutral Zone (SPEC NZ-1 through NZ-8)
+### Neutral Zone (Updated 2026-01-03)
 
-| Probability | Action |
-|-------------|--------|
-| prob > 0.55 | LONG (BUY_CALL) |
-| prob < 0.45 | SHORT (BUY_PUT) |
-| 0.45 <= prob <= 0.55 | NO_TRADE |
+**IMPORTANT:** The neutral zone was widened from 45-55% to 25-75% because model accuracy is only reliable at probability extremes. See [config.py:35-38](ml/server/config.py#L35-L38) and [predictions.py:156-168](ml/server/v6/predictions.py#L156-L168).
+
+| Probability | Action | Evidence |
+|-------------|--------|----------|
+| prob > 0.75 | LONG (BUY_CALL) | [predictions.py:188](ml/server/v6/predictions.py#L188) |
+| prob < 0.25 | SHORT (BUY_PUT) | [predictions.py:191](ml/server/v6/predictions.py#L191) |
+| 0.25 <= prob <= 0.75 | NO_TRADE | [predictions.py:186-187](ml/server/v6/predictions.py#L186-L187) |
 
 ### Boundary Precision
 
 | prob | Action | Reason |
 |------|--------|--------|
-| 0.5500000001 | BULLISH | Above threshold |
-| 0.5500000000 | NO_TRADE | At threshold (inclusive) |
-| 0.4499999999 | BEARISH | Below threshold |
-| 0.4500000000 | NO_TRADE | At threshold (inclusive) |
+| 0.7500000001 | BULLISH | Above threshold |
+| 0.7500000000 | NO_TRADE | At threshold (inclusive) |
+| 0.2499999999 | BEARISH | Below threshold |
+| 0.2500000000 | NO_TRADE | At threshold (inclusive) |
 
 ---
 
-## Confidence Buckets (SPEC BK-1 through BK-6)
+## Confidence Buckets (Updated 2026-01-03)
 
-| prob Range | Bucket | size_mult |
-|------------|--------|-----------|
-| >= 0.90 or <= 0.10 | very_strong | 1.00 (100%) |
-| >= 0.70 or <= 0.30 | strong | 0.75 (75%) |
-| >= 0.60 or <= 0.40 | moderate | 0.50 (50%) |
-| >= 0.55 or <= 0.45 | weak | 0.25 (25%) |
-| (0.45, 0.55) | neutral | N/A (NO_TRADE) |
+Buckets align with the widened neutral zone. See [predictions.py:74-107](ml/server/v6/predictions.py#L74-L107).
+
+| prob Range | Bucket | Behavior |
+|------------|--------|----------|
+| >= 0.90 or <= 0.10 | very_strong_bull / very_strong_bear | Highest confidence |
+| >= 0.85 or <= 0.15 | strong_bull / strong_bear | High confidence |
+| >= 0.80 or <= 0.20 | moderate_bull / moderate_bear | Medium confidence |
+| >= 0.75 or <= 0.25 | weak_bull / weak_bear | Minimum for trade |
+| (0.25, 0.75) | neutral | NO_TRADE zone |
 
 ---
 
-## Time Multipliers (SPEC TM-1 through TM-4)
+## Time Multipliers
+
+Position size multipliers based on time of day. See [predictions.py:110-128](ml/server/v6/predictions.py#L110-L128).
 
 | Hour (ET) | Multiplier | Reason |
 |-----------|------------|--------|
-| 13, 14, 15 | 1.0 | Peak accuracy hours |
-| 11, 12 | 0.8 | Good accuracy |
-| 10 | 0.6 | Moderate accuracy |
-| < 10 | 0.4 | Early session, lower confidence |
+| 13, 14 | 1.2 | Peak accuracy hours |
+| 12 | 1.0 | Baseline |
+| 15 | 0.8 | Late afternoon |
+| < 12 | 0.7 | Morning session |
+| >= 16 | 0.5 | After hours |
 
 ---
 
@@ -95,8 +102,8 @@ final_size = base_size × confidence_mult × time_mult × agreement_mult × risk
 
 Where:
 - base_size: Account-defined base position (e.g., $1000)
-- confidence_mult: From confidence bucket (0.25 to 1.0)
-- time_mult: From time of day (0.4 to 1.0)
+- confidence_mult: From confidence bucket (weak to very_strong)
+- time_mult: From time of day (0.5 to 1.2)
 - agreement_mult: From A/B agreement (0.6 to 1.2)
 - risk_mult: From Phase 4 risk_state
   - NORMAL: 1.0
@@ -171,7 +178,7 @@ Where:
 
 ## Invariants
 
-1. **Neutral zone is exclusive**: 45-55% always returns NO_TRADE
+1. **Neutral zone is exclusive**: 25-75% always returns NO_TRADE (widened 2026-01-03)
 2. **Sizing is multiplicative**: All factors multiply, never add
 3. **Targets are ticker-specific**: Never use wrong ticker's percentages
 4. **Session determines target**: Early=A, Late=B, no exceptions

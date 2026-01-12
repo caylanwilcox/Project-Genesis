@@ -288,30 +288,46 @@ export function ModelCarousel({ ticker = 'SPY' }: ModelCarouselProps) {
 
   // Error state
   if (error || !data) {
+    const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <div className="text-red-400">{error || 'No data available'}</div>
-        <div className="text-gray-500 text-sm mt-1">Ensure ML server is running</div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-lg font-bold text-gray-400">{ticker}</span>
+          <span className="text-yellow-400 text-sm">⚠ ML Server Offline</span>
+        </div>
+        <div className="text-gray-500 text-xs">
+          {isProduction ? (
+            <span>ML predictions require running the server locally</span>
+          ) : (
+            <span>Start server: <code className="bg-gray-800 px-1 rounded">cd ml && python -m server.app</code></span>
+          )}
+        </div>
       </div>
     )
   }
 
   // Get signal direction based on probability thresholds
-  // Confidence tiers: >80% = STRONG, >60% = ACTIONABLE, 40-60% = NEUTRAL, <40% = BEARISH
+  // SPEC: Neutral zone is 25-75% (widened 2026-01-03)
+  // Only trade at probability extremes where model accuracy is reliable
   const getSignalFromProb = (prob: number): {
     direction: 'BULLISH' | 'BEARISH' | 'NEUTRAL',
     action: string,
     confidence: 'STRONG' | 'MODERATE' | 'WEAK'
   } => {
-    if (prob > 0.80) {
+    // Bullish signals: prob > 75%
+    if (prob >= 0.90) {
       return { direction: 'BULLISH', action: view === 'current' ? 'BUY CALL' : 'EXPECT HIGHER', confidence: 'STRONG' }
-    } else if (prob > 0.60) {
+    } else if (prob >= 0.75) {
       return { direction: 'BULLISH', action: view === 'current' ? 'BUY CALL' : 'EXPECT HIGHER', confidence: 'MODERATE' }
-    } else if (prob < 0.20) {
+    }
+    // Bearish signals: prob < 25%
+    else if (prob <= 0.10) {
       return { direction: 'BEARISH', action: view === 'current' ? 'BUY PUT' : 'EXPECT LOWER', confidence: 'STRONG' }
-    } else if (prob < 0.40) {
+    } else if (prob <= 0.25) {
       return { direction: 'BEARISH', action: view === 'current' ? 'BUY PUT' : 'EXPECT LOWER', confidence: 'MODERATE' }
-    } else {
+    }
+    // Neutral zone: 25-75% = NO TRADE
+    else {
       return { direction: 'NEUTRAL', action: 'NO TRADE', confidence: 'WEAK' }
     }
   }
@@ -502,7 +518,7 @@ export function ModelCarousel({ ticker = 'SPY' }: ModelCarouselProps) {
               {/* Neutral zone explanation */}
               {prediction.direction === 'NEUTRAL' && (
                 <div className="mt-3 text-center text-xs text-yellow-400/70">
-                  40-60% = No edge. Wait for clearer signal.
+                  25-75% = No edge. Wait for clearer signal (&gt;75% or &lt;25%).
                 </div>
               )}
             </div>

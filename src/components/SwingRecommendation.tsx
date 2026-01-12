@@ -80,18 +80,22 @@ function generateRecommendation(data: SwingData): {
   const levels = phase1.levels
 
   // Calculate aggregate probabilities
-  const shortTermBullish = v6_swing.prob_1d_up > 0.5
-  const mediumTermBullish = v6_swing.prob_3d_up > 0.55
-  const swingBullish = v6_swing.prob_5d_up > 0.5 || v6_swing.prob_10d_up > 0.55
+  // SPEC: Swing model neutral zone is 20-80% per V6_SWING_MODEL.md (87%+ accuracy at extremes)
+  const shortTermBullish = v6_swing.prob_1d_up > 0.8
+  const shortTermBearish = v6_swing.prob_1d_up < 0.2
+  const mediumTermBullish = v6_swing.prob_3d_up > 0.8
+  const mediumTermBearish = v6_swing.prob_3d_up < 0.2
+  const swingBullish = v6_swing.prob_5d_up > 0.8 || v6_swing.prob_10d_up > 0.8
+  const swingBearish = v6_swing.prob_5d_up < 0.2 || v6_swing.prob_10d_up < 0.2
 
   const intradayBearish = data.intraday_bias === 'NEUTRAL' || data.intraday_execution_mode === 'NO_TRADE'
   const swingAllowed = phase4.allowed
   const swingBias = phase4.bias
 
-  // Confidence based on alignment
+  // Confidence based on alignment - use 80/20 thresholds per SPEC
   let confidence = 50
-  if (v6_swing.prob_3d_up > 0.65) confidence += 15
-  if (v6_swing.prob_10d_up > 0.6) confidence += 10
+  if (v6_swing.prob_3d_up > 0.8) confidence += 15
+  if (v6_swing.prob_10d_up > 0.8) confidence += 10
   if (phase1.confidence === 'HIGH') confidence += 10
   if (phase1.trend_alignment?.aligned) confidence += 10
   if (intradayBearish) confidence -= 10
@@ -177,13 +181,13 @@ function generateRecommendation(data: SwingData): {
     }
   }
 
-  // Case 4: Bearish across timeframes - AVOID
-  if (!shortTermBullish && !mediumTermBullish && !swingBullish) {
+  // Case 4: Bearish across timeframes - AVOID (requires <20% = actual bearish, not just neutral)
+  if (shortTermBearish && mediumTermBearish && swingBearish) {
     return {
       action: 'AVOID',
       headline: 'Stay on Sidelines',
       reasoning: [
-        'Multiple timeframes showing bearish signals',
+        'Multiple timeframes showing bearish signals (<20%)',
         `1-Day: ${v6_swing.signal_1d} (${Math.round(v6_swing.prob_1d_up * 100)}%)`,
         `3-Day: ${v6_swing.signal_3d} (${Math.round(v6_swing.prob_3d_up * 100)}%)`,
         'Wait for reversal signals before entering'
@@ -238,6 +242,21 @@ function generateRecommendation(data: SwingData): {
 
 export function SwingRecommendation({ symbol, swingData, intradayBias, intradayExecutionMode }: SwingRecommendationProps) {
   const [expanded, setExpanded] = useState(false)
+
+  // Guard: If swing data or v6_swing is missing, show placeholder
+  if (!swingData?.v6_swing || !swingData?.phase1?.levels) {
+    return (
+      <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
+        <div className="flex items-center gap-2 text-gray-400">
+          <span className="text-yellow-500">⚠</span>
+          <span className="text-sm">Swing data not available</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Swing models require the MTF endpoint. Run the ML server locally to see swing recommendations.
+        </p>
+      </div>
+    )
+  }
 
   // Add intraday context to swing data
   const enrichedData: SwingData = {

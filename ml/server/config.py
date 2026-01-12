@@ -69,17 +69,16 @@ CATEGORICAL_MAPPINGS = {
 }
 
 # =============================================================================
-# V6 FEATURE SCHEMA (29 features in fixed order)
+# V6 FEATURE SCHEMA
 # =============================================================================
-V6_FEATURE_COLS = [
-    'hour', 'day_of_week', 'week_of_year', 'month',
-    'open_to_current', 'open_to_high', 'open_to_low',
-    'current_range', 'prev_day_close', 'prev_day_range',
-    'gap_pct', 'gap_direction', 'volume_ratio',
-    'hourly_momentum', 'hourly_volatility',
-    'high_low_ratio', 'body_to_range', 'upper_wick_pct', 'lower_wick_pct',
-    'prev_hour_close', 'prev_hour_range', 'two_hour_momentum',
-    'day_range_pct', 'dist_from_high', 'dist_from_low',
-    'morning_momentum', 'morning_volatility',
-    'prev_day_body', 'prev_day_direction'
-]
+# NOTE: V6 models are SELF-DESCRIBING - feature_cols is stored inside the pickle file
+# and loaded at runtime. This ensures training/serving feature alignment.
+#
+# The model's feature_cols (29 features) are defined in ml/server/v6/features.py
+# and saved into the pickle during training (ml/train_time_split.py:367).
+#
+# At prediction time, we load feature_cols from the model itself:
+#   feature_cols = model_data['feature_cols']  # See ml/server/v6/predictions.py:31
+#
+# DO NOT define V6_FEATURE_COLS here - it would create a second source of truth
+# that could drift from the actual trained model.

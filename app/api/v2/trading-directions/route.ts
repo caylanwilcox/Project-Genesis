@@ -2,21 +2,39 @@
  * Trading Directions API
  * GET /api/v2/trading-directions
  *
- * Proxies to the Python ML server `/trading_directions` endpoint.
- * Returns EV-optimized trading signals using V6 time-split model.
+ * Priority order:
+ * 1. Local server (localhost:5001) - has full models
+ * 2. Railway server (fallback) - may have limited models
  */
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-const ML_SERVER_URL =
+const LOCAL_SERVER_URL = 'http://localhost:5001'
+const RAILWAY_SERVER_URL =
   process.env.ML_SERVER_URL ||
   process.env.NEXT_PUBLIC_ML_SERVER_URL ||
   'https://genesis-production-c1e9.up.railway.app'
 
 export async function GET() {
   try {
-    const response = await fetch(`${ML_SERVER_URL}/trading_directions`, {
+    // Try LOCAL server first (has all models)
+    try {
+      const response = await fetch(`${LOCAL_SERVER_URL}/trading_directions`, {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000) // 5s timeout for local
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return NextResponse.json({ ...data, source: 'local' })
+      }
+    } catch {
+      // Local server not available, will try Railway
+    }
+
+    // Fall back to RAILWAY server
+    const response = await fetch(`${RAILWAY_SERVER_URL}/trading_directions`, {
       cache: 'no-store',
     })
 
@@ -33,13 +51,13 @@ export async function GET() {
     }
 
     const data = await response.json()
-    return NextResponse.json(data)
+    return NextResponse.json({ ...data, source: 'railway' })
   } catch (error) {
     return NextResponse.json(
       {
         error: 'ML server unavailable',
         message:
-          'Start ML server with: cd ml && python3 predict_server.py',
+          'Start ML server with: cd ml && python -m server.app',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 503 }

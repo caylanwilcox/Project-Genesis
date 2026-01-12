@@ -102,13 +102,19 @@ export function TradingDirections() {
   }
 
   if (error || !data) {
+    const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div className="text-red-400 text-sm">
-          {error || 'No data available'}
+        <div className="text-yellow-400 text-sm flex items-center gap-2">
+          <span>⚠</span>
+          <span>ML Server Not Connected</span>
         </div>
-        <div className="text-gray-500 text-xs mt-1">
-          Ensure ML server is running with V6 models
+        <div className="text-gray-500 text-xs mt-2">
+          {isProduction ? (
+            <span>ML predictions require running the server locally</span>
+          ) : (
+            <span>Start server: <code className="bg-gray-800 px-1 rounded">cd ml && python -m server.app</code></span>
+          )}
         </div>
       </div>
     )
@@ -280,18 +286,21 @@ export function TradingDirections() {
               <div className="text-right">
                 {direction.session === 'late' && typeof direction.probability_b === 'number' ? (
                   /* Late Session: Show Target B Dominance */
+                  /* SPEC: Neutral zone is 25-75%. Only show bullish/bearish at extremes */
                   (() => {
-                    const isBullish = direction.probability_b >= 0.5
-                    const confidence = Math.round(Math.max(direction.probability_b, 1 - direction.probability_b) * 100)
-                    const dominance = isBullish ? 'BULL' : 'BEAR'
-                    const textColor = isBullish ? 'text-green-400' : 'text-red-400'
-                    const bgColor = isBullish ? 'bg-green-500/20' : 'bg-red-500/20'
+                    const isBullish = direction.probability_b > 0.75
+                    const isBearish = direction.probability_b < 0.25
+                    const isNeutral = !isBullish && !isBearish
+                    const confidence = Math.round(direction.probability_b * 100)
+                    const dominance = isBullish ? 'BULL' : isBearish ? 'BEAR' : 'WAIT'
+                    const textColor = isBullish ? 'text-green-400' : isBearish ? 'text-red-400' : 'text-yellow-400'
+                    const bgColor = isBullish ? 'bg-green-500/20' : isBearish ? 'bg-red-500/20' : 'bg-yellow-500/10'
 
                     return (
                       <div className={`px-2 py-1 rounded ${bgColor}`}>
                         <div className="flex items-center gap-1 justify-end">
                           <span className={`font-bold text-sm ${textColor}`}>
-                            {dominance} {isBullish ? '▲' : '▼'}
+                            {dominance} {isBullish ? '▲' : isBearish ? '▼' : '◆'}
                           </span>
                           <span className={`font-mono font-bold text-lg ${textColor}`}>
                             {confidence}%
@@ -307,11 +316,12 @@ export function TradingDirections() {
                   })()
                 ) : (
                   /* Early Session: Show Target A */
+                  /* SPEC: Neutral zone is 25-75% */
                   <div className="flex items-center gap-2 justify-end">
                     <span className="text-gray-500 text-xs">Target A:</span>
                     <span className={`font-mono font-bold ${
-                      direction.probability_a > 0.6 ? 'text-green-400' :
-                      direction.probability_a < 0.4 ? 'text-red-400' : 'text-gray-400'
+                      direction.probability_a > 0.75 ? 'text-green-400' :
+                      direction.probability_a < 0.25 ? 'text-red-400' : 'text-yellow-400'
                     }`}>
                       {typeof direction.probability_a === 'number' ? formatProbability(direction.probability_a) : '—'}
                     </span>

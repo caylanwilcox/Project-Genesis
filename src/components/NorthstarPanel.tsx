@@ -310,10 +310,28 @@ export function NorthstarPanel() {
   }
 
   if (error || !data) {
+    const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
-        <div className="text-red-400 text-sm">{error || 'No data available'}</div>
-        <div className="text-gray-500 text-xs mt-1">Ensure ML server is running</div>
+        <div className="text-yellow-400 text-sm flex items-center gap-2">
+          <span>⚠</span>
+          <span>ML Server Not Connected</span>
+        </div>
+        <div className="text-gray-500 text-xs mt-2">
+          {isProduction ? (
+            <>
+              <p>The ML server runs locally and isn't available in production.</p>
+              <p className="mt-1">To see live signals, run the app locally with:</p>
+              <code className="block mt-1 bg-gray-800 px-2 py-1 rounded text-gray-400">
+                cd ml && python -m server.app
+              </code>
+            </>
+          ) : (
+            <>
+              <p>Start ML server: <code className="bg-gray-800 px-1 rounded">cd ml && python -m server.app</code></p>
+            </>
+          )}
+        </div>
       </div>
     )
   }

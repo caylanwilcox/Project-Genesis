@@ -84,59 +84,56 @@ This is the most common source of training/serving skew.
 
 ## Feature Schema (SPEC FS-1 through FS-4)
 
-### 29 V6 Features (Fixed Order)
+**IMPORTANT:** V6 models are self-describing. The `feature_cols` list is stored inside each model pickle file and loaded at runtime. This ensures training/serving alignment. See [predictions.py:31](ml/server/v6/predictions.py#L31).
 
-| # | Feature | Category |
-|---|---------|----------|
-| 1 | `hour` | Temporal |
-| 2 | `day_of_week` | Temporal |
-| 3 | `week_of_year` | Temporal |
-| 4 | `month` | Temporal |
-| 5 | `open_to_current` | Price |
-| 6 | `open_to_high` | Price |
-| 7 | `open_to_low` | Price |
-| 8 | `current_range` | Price |
-| 9 | `prev_day_close` | Price |
-| 10 | `prev_day_range` | Price |
-| 11 | `gap_pct` | Price |
-| 12 | `gap_direction` | Volume |
-| 13 | `volume_ratio` | Volume |
-| 14 | `hourly_momentum` | Momentum |
-| 15 | `hourly_volatility` | Momentum |
-| 16 | `high_low_ratio` | Structure |
-| 17 | `body_to_range` | Structure |
-| 18 | `upper_wick_pct` | Structure |
-| 19 | `lower_wick_pct` | Structure |
-| 20 | `prev_hour_close` | Momentum |
-| 21 | `prev_hour_range` | Momentum |
-| 22 | `two_hour_momentum` | Momentum |
-| 23 | `day_range_pct` | Structure |
-| 24 | `dist_from_high` | Structure |
-| 25 | `dist_from_low` | Structure |
-| 26 | `morning_momentum` | Momentum |
-| 27 | `morning_volatility` | Momentum |
-| 28 | `prev_day_body` | Previous Day |
-| 29 | `prev_day_direction` | Previous Day |
+### 29 V6 Features
+
+Features are built by [features.py](ml/server/v6/features.py). The model carries its own feature_cols, ensuring alignment.
+
+| # | Feature | Category | Evidence |
+|---|---------|----------|----------|
+| 1 | `gap` | Gap | [features.py:59](ml/server/v6/features.py#L59) |
+| 2 | `gap_size` | Gap | [features.py:60](ml/server/v6/features.py#L60) |
+| 3 | `gap_direction` | Gap | [features.py:61](ml/server/v6/features.py#L61) |
+| 4 | `prev_return` | Previous Day | [features.py:64](ml/server/v6/features.py#L64) |
+| 5 | `prev_range` | Previous Day | [features.py:65](ml/server/v6/features.py#L65) |
+| 6 | `prev_body` | Previous Day | [features.py:66](ml/server/v6/features.py#L66) |
+| 7 | `prev_bullish` | Previous Day | [features.py:67](ml/server/v6/features.py#L67) |
+| 8 | `current_vs_open` | Current Position | [features.py:70](ml/server/v6/features.py#L70) |
+| 9 | `current_vs_open_direction` | Current Position | [features.py:71](ml/server/v6/features.py#L71) |
+| 10 | `above_open` | Current Position | [features.py:72](ml/server/v6/features.py#L72) |
+| 11 | `position_in_range` | Current Position | [features.py:73](ml/server/v6/features.py#L73) |
+| 12 | `range_so_far_pct` | Current Position | [features.py:74](ml/server/v6/features.py#L74) |
+| 13 | `near_high` | Current Position | [features.py:77](ml/server/v6/features.py#L77) |
+| 14 | `gap_filled` | Gap Status | [features.py:80](ml/server/v6/features.py#L80) |
+| 15 | `morning_reversal` | Gap Status | [features.py:81](ml/server/v6/features.py#L81) |
+| 16 | `time_pct` | Time | [features.py:84](ml/server/v6/features.py#L84) |
+| 17 | `first_hour_return` | Momentum | [features.py:85](ml/server/v6/features.py#L85) |
+| 18 | `last_hour_return` | Momentum | [features.py:86](ml/server/v6/features.py#L86) |
+| 19 | `bullish_bar_ratio` | Momentum | [features.py:87](ml/server/v6/features.py#L87) |
+| 20 | `is_monday` | Calendar | [features.py:90](ml/server/v6/features.py#L90) |
+| 21 | `is_friday` | Calendar | [features.py:91](ml/server/v6/features.py#L91) |
+| 22 | `mean_reversion_signal` | Mean Reversion | [features.py:94](ml/server/v6/features.py#L94) |
+| 23 | `current_vs_11am` | 11AM (late only) | [features.py:99](ml/server/v6/features.py#L99) |
+| 24 | `above_11am` | 11AM (late only) | [features.py:100](ml/server/v6/features.py#L100) |
+| 25 | `return_3d` | Multi-Day | [features.py:107](ml/server/v6/features.py#L107) |
+| 26 | `return_5d` | Multi-Day | [features.py:108](ml/server/v6/features.py#L108) |
+| 27 | `volatility_5d` | Multi-Day | [features.py:110](ml/server/v6/features.py#L110) |
+| 28 | `consecutive_up` | Multi-Day | [features.py:117-123](ml/server/v6/features.py#L117-L123) |
+| 29 | `consecutive_down` | Multi-Day | [features.py:124-128](ml/server/v6/features.py#L124-L128) |
 
 ### Feature Order Enforcement
 
 ```python
-# From server/config.py
-V6_FEATURE_COLS = [
-    'hour', 'day_of_week', 'week_of_year', 'month',
-    'open_to_current', 'open_to_high', 'open_to_low',
-    'current_range', 'prev_day_close', 'prev_day_range',
-    'gap_pct', 'gap_direction', 'volume_ratio',
-    'hourly_momentum', 'hourly_volatility',
-    'high_low_ratio', 'body_to_range', 'upper_wick_pct', 'lower_wick_pct',
-    'prev_hour_close', 'prev_hour_range', 'two_hour_momentum',
-    'day_range_pct', 'dist_from_high', 'dist_from_low',
-    'morning_momentum', 'morning_volatility',
-    'prev_day_body', 'prev_day_direction'
-]
+# Model is self-describing - feature_cols stored in pickle
+# See ml/server/v6/predictions.py:31
+feature_cols = model_data['feature_cols']
 
-# Usage
-X = np.array([[features.get(col, 0) for col in V6_FEATURE_COLS]])
+# Features built by ml/server/v6/features.py
+features, price_11am = build_v6_features(hourly_bars, daily_bars, today_open, current_hour)
+
+# Feature array created using model's feature_cols
+X = np.array([[features.get(col, 0) for col in feature_cols]])
 ```
 
 ---
@@ -226,7 +223,7 @@ if today_open is None or today_open <= 0:
 ## Invariants
 
 1. **Feature count is fixed**: Always 29 features, no more, no less
-2. **Feature order matches training**: V6_FEATURE_COLS constant is authoritative
+2. **Model is self-describing**: feature_cols stored in pickle, loaded at runtime
 3. **Today's open from daily bar**: daily_bars[-1]['o'], not hourly
 4. **Previous day excludes today**: daily_bars[-2] for prev_day features
 5. **No NaN in model input**: All replaced with 0

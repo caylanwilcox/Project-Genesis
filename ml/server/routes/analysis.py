@@ -264,10 +264,12 @@ def swing_analysis():
                             'prob_3d_up': round(float(prob_3d), 3) if prob_3d is not None else None,
                             'prob_5d_up': round(float(prob_5d), 3),
                             'prob_10d_up': round(float(prob_10d), 3),
-                            'signal_1d': 'BULLISH' if prob_1d and prob_1d > 0.6 else ('BEARISH' if prob_1d and prob_1d < 0.4 else 'NEUTRAL') if prob_1d else None,
-                            'signal_3d': 'BULLISH' if prob_3d and prob_3d > 0.6 else ('BEARISH' if prob_3d and prob_3d < 0.4 else 'NEUTRAL') if prob_3d else None,
-                            'signal_5d': 'BULLISH' if prob_5d > 0.6 else ('BEARISH' if prob_5d < 0.4 else 'NEUTRAL'),
-                            'signal_10d': 'BULLISH' if prob_10d > 0.6 else ('BEARISH' if prob_10d < 0.4 else 'NEUTRAL')
+                            # SPEC: Swing model neutral zone is 20-80% based on V6_SWING_MODEL.md backtest data
+                            # >80% or <20% = reliable signals (87%+ accuracy)
+                            'signal_1d': 'BULLISH' if prob_1d and prob_1d > 0.8 else ('BEARISH' if prob_1d and prob_1d < 0.2 else 'NEUTRAL') if prob_1d else None,
+                            'signal_3d': 'BULLISH' if prob_3d and prob_3d > 0.8 else ('BEARISH' if prob_3d and prob_3d < 0.2 else 'NEUTRAL') if prob_3d else None,
+                            'signal_5d': 'BULLISH' if prob_5d > 0.8 else ('BEARISH' if prob_5d < 0.2 else 'NEUTRAL'),
+                            'signal_10d': 'BULLISH' if prob_10d > 0.8 else ('BEARISH' if prob_10d < 0.2 else 'NEUTRAL')
                         }
             except (ImportError, KeyError):
                 pass  # V6 SWING model optional
@@ -390,7 +392,8 @@ def multi_timeframe_analysis():
                             'target_a_prob': round(float(prob_a), 3),
                             'target_b_prob': round(float(prob_b), 3),
                             'session': session,
-                            'signal': 'BULLISH' if prob_a > 0.6 else ('BEARISH' if prob_a < 0.4 else 'NEUTRAL')
+                            # SPEC: Intraday neutral zone is 25-75% per 06_policy_risk_engine/CURRENT.md
+                            'signal': 'BULLISH' if prob_a > 0.75 else ('BEARISH' if prob_a < 0.25 else 'NEUTRAL')
                         }
 
                 # Northstar intraday
@@ -420,10 +423,11 @@ def multi_timeframe_analysis():
                                 'prob_3d_up': round(float(prob_3d), 3) if prob_3d is not None else None,
                                 'prob_5d_up': round(float(prob_5d), 3),
                                 'prob_10d_up': round(float(prob_10d), 3),
-                                'signal_1d': 'BULLISH' if prob_1d and prob_1d > 0.6 else ('BEARISH' if prob_1d and prob_1d < 0.4 else 'NEUTRAL') if prob_1d else None,
-                                'signal_3d': 'BULLISH' if prob_3d and prob_3d > 0.6 else ('BEARISH' if prob_3d and prob_3d < 0.4 else 'NEUTRAL') if prob_3d else None,
-                                'signal_5d': 'BULLISH' if prob_5d > 0.6 else ('BEARISH' if prob_5d < 0.4 else 'NEUTRAL'),
-                                'signal_10d': 'BULLISH' if prob_10d > 0.6 else ('BEARISH' if prob_10d < 0.4 else 'NEUTRAL')
+                                # SPEC: Swing model neutral zone is 20-80% based on V6_SWING_MODEL.md
+                                'signal_1d': 'BULLISH' if prob_1d and prob_1d > 0.8 else ('BEARISH' if prob_1d and prob_1d < 0.2 else 'NEUTRAL') if prob_1d else None,
+                                'signal_3d': 'BULLISH' if prob_3d and prob_3d > 0.8 else ('BEARISH' if prob_3d and prob_3d < 0.2 else 'NEUTRAL') if prob_3d else None,
+                                'signal_5d': 'BULLISH' if prob_5d > 0.8 else ('BEARISH' if prob_5d < 0.2 else 'NEUTRAL'),
+                                'signal_10d': 'BULLISH' if prob_10d > 0.8 else ('BEARISH' if prob_10d < 0.2 else 'NEUTRAL')
                             }
                 except (ImportError, KeyError):
                     pass
