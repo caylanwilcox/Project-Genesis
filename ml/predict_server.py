@@ -4334,3 +4334,4 @@ if __name__ == '__main__':
     else:
         print("Error: No models could be loaded.")
         print("Run upgrade_production_models.py first to train models.")
+# Trigger redeploy Mon Jan 12 08:59:02 CST 2026
