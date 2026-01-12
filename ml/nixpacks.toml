@@ -1,0 +1,13 @@
+# Nixpacks configuration for Railway
+[phases.setup]
+nixPkgs = ["git-lfs"]
+
+[phases.build]
+cmds = [
+    "git lfs install --skip-repo",
+    "git lfs pull",
+    "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "gunicorn server.app:app --bind 0.0.0.0:$PORT --timeout 120 --workers 2"
