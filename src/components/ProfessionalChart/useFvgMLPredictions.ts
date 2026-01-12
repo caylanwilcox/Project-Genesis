@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FvgPattern } from './fvgDrawing'
 import { CandleData } from './types'
 
-const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'https://genesis-production-c1e9.up.railway.app'
+const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'https://project-genesis-6roa.onrender.com'
 
 interface MLPredictionResponse {
   prediction: 'win' | 'loss'

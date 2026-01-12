@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 const ML_SERVER_URL =
   process.env.ML_SERVER_URL ||
   process.env.NEXT_PUBLIC_ML_SERVER_URL ||
-  'https://genesis-production-c1e9.up.railway.app'
+  'https://project-genesis-6roa.onrender.com'
 
 export async function GET(request: Request) {
   try {

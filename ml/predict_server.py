@@ -3300,18 +3300,23 @@ def get_v6_prediction(ticker, hourly_bars, daily_bars, current_hour):
 
 
 def get_probability_bucket(prob):
-    """Classify probability into bucket"""
-    if prob >= 0.90:
+    """
+    Classify probability into bucket.
+
+    SPEC: 25-75% is neutral zone (no trade)
+    - >= 85%: very_strong_bull (highest confidence)
+    - 75-85%: strong_bull (actionable)
+    - 25-75%: neutral (NO TRADE)
+    - 15-25%: strong_bear (actionable)
+    - <= 15%: very_strong_bear (highest confidence)
+    """
+    if prob >= 0.85:
         return 'very_strong_bull'
-    elif prob >= 0.70:
+    elif prob >= 0.75:
         return 'strong_bull'
-    elif prob >= 0.60:
-        return 'moderate_bull'
-    elif prob >= 0.40:
+    elif prob > 0.25:
         return 'neutral'
-    elif prob >= 0.30:
-        return 'moderate_bear'
-    elif prob >= 0.10:
+    elif prob >= 0.15:
         return 'strong_bear'
     else:
         return 'very_strong_bear'
@@ -3405,21 +3410,20 @@ def trading_directions():
         'best_ticker': None,
         'trading_rules': {
             'entry': [
-                'Only trade when probability > 60% or < 40%',
-                'Size up 25% when Target A & B agree',
-                'Size up 20% during 1-3 PM (peak accuracy)',
-                'Size down 50% on compressed volatility days'
+                'LONG only when probability >= 75%',
+                'SHORT only when probability <= 25%',
+                'NO TRADE in neutral zone (25-75%)',
+                'Size up when Target A & B agree',
+                'Peak accuracy: 1-3 PM ET'
             ],
             'sizing': {
-                'very_strong': '100% of max position (prob >90% or <10%)',
-                'strong': '75% of max (prob 70-90% or 10-30%)',
-                'moderate': '50% of max (prob 60-70% or 30-40%)',
-                'neutral': 'NO TRADE (prob 45-55%)'
+                'very_strong': '100% of max (prob >= 85% or <= 15%)',
+                'strong': '75% of max (prob 75-85% or 15-25%)',
+                'neutral': 'NO TRADE (prob 25-75%)'
             },
             'exit': {
-                'stop_loss': '-0.25%',
-                'take_profit': '+0.50% (2R)',
-                'trailing': 'Start after +0.25% (1R)',
+                'stop_loss': 'Ticker-specific (SPY: 0.33%, QQQ: 0.45%, IWM: 0.60%)',
+                'take_profit': 'Ticker-specific (SPY: 0.25%, QQQ: 0.34%, IWM: 0.45%)',
                 'time_stop': '3:50 PM ET'
             }
         },
@@ -3500,36 +3504,39 @@ def trading_directions():
             action_prob = prob_b if session == 'late' else prob_a
             bucket = get_probability_bucket(action_prob)
 
-            # Check neutral zone
-            if 0.45 <= action_prob <= 0.55:
+            # Check neutral zone - SPEC: 25-75% threshold (matches frontend)
+            # Only generate LONG/SHORT signals at the extremes for high confidence
+            if 0.25 < action_prob < 0.75:
                 action = 'NO_TRADE'
-                reason = 'Neutral probability zone (45-55%)'
+                reason = f'Neutral zone ({int(action_prob * 100)}%) - wait for stronger signal'
                 position_pct = 0
                 confidence = 0
             else:
                 # Determine direction based on session-appropriate probability
-                action = 'LONG' if action_prob > 0.5 else 'SHORT'
+                # LONG when prob >= 75% (strongly bullish)
+                # SHORT when prob <= 25% (strongly bearish)
+                action = 'LONG' if action_prob >= 0.75 else 'SHORT'
                 target_label = 'Target B (vs 11AM)' if session == 'late' else 'Target A (vs Open)'
-                reason = f"{bucket.replace('_', ' ').title()} - {target_label}"
+                strength = 'Strong' if (action_prob >= 0.85 or action_prob <= 0.15) else 'Moderate'
+                reason = f"{strength} {action.lower()} signal ({int(action_prob * 100)}%) - {target_label}"
 
                 # Calculate position size based on action_prob (session-appropriate)
-                base_pct = 20  # Base 20% of capital
+                base_pct = 25  # Base 25% of capital for actionable signals
                 prob_factor = 0.5 + abs(action_prob - 0.5)  # 0.5 to 1.0
                 agreement = get_signal_agreement_multiplier(prob_a, prob_b)
                 time_mult = get_time_multiplier(current_hour)
 
-                # Size by bucket
+                # Size by bucket (simplified - only strong and very_strong actionable)
                 if bucket in ['very_strong_bull', 'very_strong_bear']:
-                    size_mult = 1.0
-                elif bucket in ['strong_bull', 'strong_bear']:
-                    size_mult = 0.75
-                elif bucket in ['moderate_bull', 'moderate_bear']:
-                    size_mult = 0.5
+                    size_mult = 1.0  # Full size for >= 85% or <= 15%
                 else:
-                    size_mult = 0
+                    size_mult = 0.75  # Reduced for 75-85% or 15-25%
 
                 position_pct = base_pct * prob_factor * agreement * time_mult * size_mult
-                position_pct = min(position_pct, 40)  # Cap at 40%
+                position_pct = min(position_pct, 50)  # Cap at 50%
+
+                # Confidence as percentage (0-100)
+                # 75% prob = 50 confidence, 100% prob = 100 confidence
                 confidence = int(abs(action_prob - 0.5) * 200)
 
             # Calculate targets - based on historical median moves from 11AM to close
@@ -3561,12 +3568,23 @@ def trading_directions():
                 best_score = score
                 best_ticker = ticker
 
+            # Determine confidence tier for frontend display
+            if action_prob >= 0.85 or action_prob <= 0.15:
+                confidence_tier = 'very_high'
+            elif action_prob >= 0.75 or action_prob <= 0.25:
+                confidence_tier = 'high'
+            elif action_prob >= 0.60 or action_prob <= 0.40:
+                confidence_tier = 'medium'
+            else:
+                confidence_tier = 'low'
+
             result['tickers'][ticker] = {
                 'action': action,
                 'reason': reason,
                 'probability_a': round(prob_a, 3),
                 'probability_b': round(prob_b, 3),
                 'bucket': bucket,
+                'confidence_tier': confidence_tier,
                 'position_pct': round(position_pct, 1),
                 'confidence': confidence,
                 'current_price': round(current_price, 2),
@@ -3576,6 +3594,12 @@ def trading_directions():
                 'stop_loss': round(stop_loss, 2) if stop_loss else None,
                 'take_profit': round(take_profit, 2) if take_profit else None,
                 'session': session,
+                'thresholds': {
+                    'long': 0.75,
+                    'short': 0.25,
+                    'neutral_low': 0.25,
+                    'neutral_high': 0.75
+                },
                 'multipliers': {
                     'time': get_time_multiplier(current_hour),
                     'agreement': get_signal_agreement_multiplier(prob_a, prob_b)
@@ -3595,19 +3619,33 @@ def trading_directions():
 
     result['best_ticker'] = best_ticker
 
-    # Add summary guidance
+    # Add summary guidance with detailed reasoning
     actionable = [t for t, d in result['tickers'].items() if d.get('action') in ['LONG', 'SHORT']]
     if actionable:
+        # Build detailed recommendation
+        details = []
+        for t in actionable:
+            td = result['tickers'][t]
+            action_prob = td['probability_b'] if td['session'] == 'late' else td['probability_a']
+            details.append(f"{t} {td['action']} ({int(action_prob * 100)}%)")
+
         result['summary'] = {
             'actionable_tickers': actionable,
             'best_opportunity': best_ticker,
-            'recommendation': f"Focus on {best_ticker}" if best_ticker else "No clear opportunity"
+            'recommendation': f"Actionable: {', '.join(details)}. Best: {best_ticker}" if best_ticker else f"Signals: {', '.join(details)}"
         }
     else:
+        # Explain why no trades
+        neutral_info = []
+        for t, td in result['tickers'].items():
+            if td.get('action') == 'NO_TRADE' and not td.get('error'):
+                action_prob = td.get('probability_b', td.get('probability_a', 0.5))
+                neutral_info.append(f"{t}: {int(action_prob * 100)}%")
+
         result['summary'] = {
             'actionable_tickers': [],
             'best_opportunity': None,
-            'recommendation': 'No trades meet criteria. Wait for clearer signals.'
+            'recommendation': f"All in neutral zone (25-75%). {', '.join(neutral_info)}. Wait for stronger signals."
         }
 
     return jsonify(result)

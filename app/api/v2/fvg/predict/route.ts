@@ -13,7 +13,7 @@ import { fvgDetectionRepo } from '@/repositories'
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 
-const ML_SERVER_URL = process.env.ML_SERVER_URL || 'https://genesis-production-c1e9.up.railway.app'
+const ML_SERVER_URL = process.env.ML_SERVER_URL || 'https://project-genesis-6roa.onrender.com'
 
 interface PredictionResult {
   fvg_id: string

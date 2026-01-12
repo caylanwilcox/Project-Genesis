@@ -7,7 +7,7 @@
 
 import { FvgMLFeatures } from './fvgFeatureService'
 
-const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'https://genesis-production-c1e9.up.railway.app'
+const ML_SERVER_URL = process.env.NEXT_PUBLIC_ML_SERVER_URL || 'https://project-genesis-6roa.onrender.com'
 
 export interface MLPrediction {
   prediction: 'win' | 'loss'
