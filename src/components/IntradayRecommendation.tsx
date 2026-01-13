@@ -22,6 +22,8 @@ export function IntradayRecommendation({ symbol }: IntradayRecommendationProps) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const [marketClosed, setMarketClosed] = useState(false)
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -30,6 +32,16 @@ export function IntradayRecommendation({ symbol }: IntradayRecommendationProps) 
         if (!response.ok) throw new Error('Failed to fetch')
 
         const result = await response.json()
+
+        // Check if market is closed
+        if (result.market_open === false) {
+          setMarketClosed(true)
+          setData(null)
+          setError(null)
+          return
+        }
+
+        setMarketClosed(false)
         const tickerData = result.tickers?.[symbol]
 
         if (tickerData) {
@@ -65,6 +77,28 @@ export function IntradayRecommendation({ symbol }: IntradayRecommendationProps) 
         <div className="flex items-center gap-2 text-gray-400">
           <div className="animate-spin h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full" />
           <span className="text-sm">Loading {symbol}...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Market closed state
+  if (marketClosed) {
+    return (
+      <div className="rounded-xl border border-gray-700 bg-gray-900/50 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-bold text-white">{symbol}</span>
+          <span className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400">
+            MARKET CLOSED
+          </span>
+        </div>
+        <div className="text-gray-500 text-sm">
+          Signals available during market hours (9:30 AM - 4:00 PM ET)
+        </div>
+        <div className="mt-3 pt-3 border-t border-gray-700">
+          <div className="text-xs text-gray-600">
+            V6 Intraday predictions update every minute during trading
+          </div>
         </div>
       </div>
     )
