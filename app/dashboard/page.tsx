@@ -6,6 +6,7 @@ import { useMultiTickerData } from '@/hooks/useMultiTickerData'
 import { NorthstarPanel } from '@/components/NorthstarPanel'
 import { ModelCarousel } from '@/components/ModelCarousel'
 import { SwingRecommendation, type SwingData } from '@/components/SwingRecommendation'
+import { IntradayRecommendation } from '@/components/IntradayRecommendation'
 import { polygonWebSocketService, Trade } from '@/services/polygonWebSocket'
 
 interface TickerDirection {
@@ -656,8 +657,20 @@ export default function Dashboard() {
         <ModelCarousel ticker="IWM" />
       </div>
 
-      {/* AI Trading Recommendations - only show when swing models are trained */}
-      {/* Hidden until swing models are available */}
+      {/* AI Trading Recommendations */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">AI Trading Recommendations</h3>
+          <span className="text-xs px-2 py-1 rounded bg-cyan-500/20 text-cyan-400">
+            V6 Intraday Model
+          </span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <IntradayRecommendation symbol="SPY" />
+          <IntradayRecommendation symbol="QQQ" />
+          <IntradayRecommendation symbol="IWM" />
+        </div>
+      </div>
 
       {/* Northstar Phase Pipeline */}
       <div className="mt-6">
