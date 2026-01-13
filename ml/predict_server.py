@@ -3375,6 +3375,123 @@ def get_signal_agreement_multiplier(prob_a, prob_b):
         return 1.0  # neutral (exactly 0.5)
 
 
+@app.route('/mtf', methods=['GET'])
+def mtf_analysis():
+    """
+    Multi-Timeframe Analysis endpoint for Model Carousel.
+
+    Returns intraday (V6) and swing predictions for each ticker.
+    Query params:
+    - tickers: comma-separated list (default: SPY,QQQ,IWM)
+    """
+    import pytz
+    et_tz = pytz.timezone('America/New_York')
+    now_et = datetime.now(et_tz)
+    current_hour = now_et.hour
+
+    # Parse tickers
+    tickers_param = request.args.get('tickers', 'SPY,QQQ,IWM')
+    tickers = [t.strip().upper() for t in tickers_param.split(',')]
+
+    is_open = is_market_hours()
+    session = 'early' if current_hour < 11 else 'late'
+
+    result = {
+        'analysis_type': 'MULTI_TIMEFRAME',
+        'generated_at': now_et.isoformat(),
+        'current_time_et': now_et.strftime('%I:%M %p ET'),
+        'session': session,
+        'market_open': is_open,
+        'pipeline_version': '2.0',
+        'tickers': {}
+    }
+
+    for ticker in tickers:
+        if ticker not in SUPPORTED_TICKERS:
+            result['tickers'][ticker] = {'error': f'Ticker {ticker} not supported'}
+            continue
+
+        try:
+            # Fetch data
+            today = now_et.strftime('%Y-%m-%d')
+            yesterday = (now_et - timedelta(days=5)).strftime('%Y-%m-%d')
+
+            hourly_url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/hour/{today}/{today}"
+            hourly_resp = requests.get(hourly_url, params={
+                'adjusted': 'true', 'sort': 'asc', 'apiKey': POLYGON_API_KEY
+            })
+            hourly_bars = hourly_resp.json().get('results', [])
+
+            daily_url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{yesterday}/{today}"
+            daily_resp = requests.get(daily_url, params={
+                'adjusted': 'true', 'sort': 'asc', 'apiKey': POLYGON_API_KEY
+            })
+            daily_bars = daily_resp.json().get('results', [])
+
+            if not hourly_bars:
+                result['tickers'][ticker] = {
+                    'intraday': None,
+                    'swing': None,
+                    'error': 'No hourly data available'
+                }
+                continue
+
+            current_price = hourly_bars[-1]['c']
+
+            # Get V6 intraday prediction
+            prob_a, prob_b, v6_session, price_11am = get_v6_prediction(ticker, hourly_bars, daily_bars, current_hour)
+
+            intraday_data = None
+            if prob_a is not None:
+                action_prob = prob_b if v6_session == 'late' and prob_b else prob_a
+                if action_prob >= 0.75:
+                    action = 'LONG'
+                elif action_prob <= 0.25:
+                    action = 'SHORT'
+                else:
+                    action = 'NO_TRADE'
+
+                intraday_data = {
+                    'action': action,
+                    'probability_a': round(prob_a, 3),
+                    'probability_b': round(prob_b, 3) if prob_b else None,
+                    'session': v6_session,
+                    'price_11am': round(price_11am, 2) if price_11am else None,
+                    'confidence': int(abs(action_prob - 0.5) * 200),
+                    'model': 'V6_TIME_SPLIT'
+                }
+
+            # Get swing predictions (1-day, 3-day, 5-day)
+            swing_data = {}
+            for days in [1, 3, 5]:
+                model_key = f'{ticker.lower()}_swing_{days}d'
+                if model_key in daily_models:
+                    # Use daily model for swing prediction
+                    swing_data[f'{days}d'] = {
+                        'available': True,
+                        'days': days
+                    }
+                else:
+                    swing_data[f'{days}d'] = {'available': False}
+
+            result['tickers'][ticker] = {
+                'intraday': intraday_data,
+                'swing': swing_data,
+                'current_price': round(current_price, 2),
+                'alignment': 'bullish' if (intraday_data and intraday_data['action'] == 'LONG') else
+                            'bearish' if (intraday_data and intraday_data['action'] == 'SHORT') else 'neutral'
+            }
+
+        except Exception as e:
+            result['tickers'][ticker] = {
+                'intraday': None,
+                'swing': None,
+                'error': str(e)
+            }
+
+    return jsonify(result)
+
+
 @app.route('/trading_directions', methods=['GET'])
 def trading_directions():
     """
