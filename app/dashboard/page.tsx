@@ -656,35 +656,8 @@ export default function Dashboard() {
         <ModelCarousel ticker="IWM" />
       </div>
 
-      {/* AI Trading Recommendations */}
-      {swingDataMap.size > 0 && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">AI Trading Recommendations</h3>
-            <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400">
-              Swing + Intraday Analysis
-            </span>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {['SPY', 'QQQ', 'IWM'].map(symbol => {
-              const swingData = swingDataMap.get(symbol)
-              const intradayData = intradayDataMap.get(symbol)
-              if (!swingData) return null
-              return (
-                <div key={symbol}>
-                  <div className="text-sm font-medium text-gray-400 mb-2">{symbol}</div>
-                  <SwingRecommendation
-                    symbol={symbol}
-                    swingData={swingData}
-                    intradayBias={intradayData?.phase4?.bias}
-                    intradayExecutionMode={intradayData?.phase4?.execution_mode}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {/* AI Trading Recommendations - only show when swing models are trained */}
+      {/* Hidden until swing models are available */}
 
       {/* Northstar Phase Pipeline */}
       <div className="mt-6">
