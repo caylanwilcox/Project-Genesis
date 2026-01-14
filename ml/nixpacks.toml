@@ -1,9 +1,11 @@
-# Nixpacks configuration for Railway
+# Nixpacks configuration for Render/Railway
 [phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python311", "git-lfs"]
 
 [phases.install]
 cmds = [
+    "git lfs install",
+    "git lfs pull",
     "python -m venv --copies /opt/venv",
     ". /opt/venv/bin/activate && pip install -r requirements.txt"
 ]

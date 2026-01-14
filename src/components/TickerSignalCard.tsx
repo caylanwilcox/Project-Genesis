@@ -197,8 +197,8 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
       {/* Direction - Clickable */}
       <div
         className={`rounded-lg p-2 mb-2 cursor-pointer transition-all ${
-          ns.phase1.direction === 'UP' ? 'bg-green-900/30 border border-green-500/30 hover:bg-green-900/40' :
-          ns.phase1.direction === 'DOWN' ? 'bg-red-900/30 border border-red-500/30 hover:bg-red-900/40' :
+          ns.phase1?.direction === 'UP' ? 'bg-green-900/30 border border-green-500/30 hover:bg-green-900/40' :
+          ns.phase1?.direction === 'DOWN' ? 'bg-red-900/30 border border-red-500/30 hover:bg-red-900/40' :
           'bg-gray-800/50 border border-gray-700 hover:bg-gray-800/70'
         }`}
         onClick={() => toggleExpand('direction')}
@@ -206,26 +206,26 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className={`text-lg ${
-              ns.phase1.direction === 'UP' ? 'text-green-400' :
-              ns.phase1.direction === 'DOWN' ? 'text-red-400' :
+              ns.phase1?.direction === 'UP' ? 'text-green-400' :
+              ns.phase1?.direction === 'DOWN' ? 'text-red-400' :
               'text-gray-400'
             }`}>
-              {ns.phase1.direction === 'UP' ? '▲' : ns.phase1.direction === 'DOWN' ? '▼' : '◆'}
+              {ns.phase1?.direction === 'UP' ? '▲' : ns.phase1?.direction === 'DOWN' ? '▼' : '◆'}
             </span>
             <span className="text-white font-medium">
-              {ns.phase1.direction === 'UP' ? 'Bullish Structure' :
-               ns.phase1.direction === 'DOWN' ? 'Bearish Structure' :
+              {ns.phase1?.direction === 'UP' ? 'Bullish Structure' :
+               ns.phase1?.direction === 'DOWN' ? 'Bearish Structure' :
                'Balanced/Choppy'}
             </span>
             <span className="text-gray-600 text-xs">i</span>
           </div>
           <span className={`text-xs ${
-            ns.phase1.confidence_band === 'STRUCTURAL_EDGE' ? 'text-green-400' :
-            ns.phase1.confidence_band === 'CONTEXT_ONLY' ? 'text-yellow-400' :
+            ns.phase1?.confidence_band === 'STRUCTURAL_EDGE' ? 'text-green-400' :
+            ns.phase1?.confidence_band === 'CONTEXT_ONLY' ? 'text-yellow-400' :
             'text-red-400'
           }`}>
-            {ns.phase1.confidence_band === 'STRUCTURAL_EDGE' ? 'Strong Edge' :
-             ns.phase1.confidence_band === 'CONTEXT_ONLY' ? 'Weak Edge' :
+            {ns.phase1?.confidence_band === 'STRUCTURAL_EDGE' ? 'Strong Edge' :
+             ns.phase1?.confidence_band === 'CONTEXT_ONLY' ? 'Weak Edge' :
              'No Edge'}
           </span>
         </div>
@@ -233,50 +233,50 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
           <div className="mt-2 pt-2 border-t border-gray-700 text-xs space-y-2">
             {/* Acceptance Details */}
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${ns.phase1.acceptance?.accepted ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className={`w-2 h-2 rounded-full ${ns.phase1?.acceptance?.accepted ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-gray-300">Price Acceptance:</span>
-              <span className={ns.phase1.acceptance?.accepted ? 'text-green-400' : 'text-red-400'}>
-                {ns.phase1.acceptance?.accepted
-                  ? `YES - ${ns.phase1.acceptance?.acceptance_strength || 'MODERATE'}`
+              <span className={ns.phase1?.acceptance?.accepted ? 'text-green-400' : 'text-red-400'}>
+                {ns.phase1?.acceptance?.accepted
+                  ? `YES - ${ns.phase1?.acceptance?.acceptance_strength || 'MODERATE'}`
                   : 'NO'}
               </span>
             </div>
 
-            {ns.phase1.acceptance?.acceptance_reason && (
+            {ns.phase1?.acceptance?.acceptance_reason && (
               <div className="text-gray-400 pl-4 text-xs italic">
-                {ns.phase1.acceptance.acceptance_reason}
+                {ns.phase1?.acceptance?.acceptance_reason}
               </div>
             )}
 
-            {ns.phase1.acceptance?.failed_levels?.length > 0 && (
+            {ns.phase1?.acceptance?.failed_levels?.length > 0 && (
               <div className="text-red-400 pl-4">
-                Warning: Failed levels: {ns.phase1.acceptance.failed_levels.join(', ')}
+                Warning: Failed levels: {ns.phase1?.acceptance?.failed_levels?.join(', ')}
               </div>
             )}
 
             {/* Range State */}
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${
-                ns.phase1.range?.state === 'TREND' ? 'bg-green-500' :
-                ns.phase1.range?.state === 'BALANCE' ? 'bg-yellow-500' : 'bg-red-500'
+                ns.phase1?.range?.state === 'TREND' ? 'bg-green-500' :
+                ns.phase1?.range?.state === 'BALANCE' ? 'bg-yellow-500' : 'bg-red-500'
               }`} />
               <span className="text-gray-300">Range State:</span>
               <span className={
-                ns.phase1.range?.state === 'TREND' ? 'text-green-400' :
-                ns.phase1.range?.state === 'BALANCE' ? 'text-yellow-400' : 'text-red-400'
+                ns.phase1?.range?.state === 'TREND' ? 'text-green-400' :
+                ns.phase1?.range?.state === 'BALANCE' ? 'text-yellow-400' : 'text-red-400'
               }>
-                {ns.phase1.range?.state || 'UNKNOWN'}
+                {ns.phase1?.range?.state || 'UNKNOWN'}
               </span>
             </div>
 
             {/* MTF Alignment */}
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${ns.phase1.mtf?.aligned ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span className={`w-2 h-2 rounded-full ${ns.phase1?.mtf?.aligned ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-gray-300">Multi-Timeframe:</span>
-              <span className={ns.phase1.mtf?.aligned ? 'text-green-400' : 'text-red-400'}>
-                {ns.phase1.mtf?.aligned
-                  ? `ALIGNED - ${ns.phase1.mtf?.dominant_tf || 'INTRADAY'} dominant`
-                  : `CONFLICT - ${ns.phase1.mtf?.conflict_tf || 'Timeframes disagree'}`}
+              <span className={ns.phase1?.mtf?.aligned ? 'text-green-400' : 'text-red-400'}>
+                {ns.phase1?.mtf?.aligned
+                  ? `ALIGNED - ${ns.phase1?.mtf?.dominant_tf || 'INTRADAY'} dominant`
+                  : `CONFLICT - ${ns.phase1?.mtf?.conflict_tf || 'Timeframes disagree'}`}
               </span>
             </div>
           </div>
@@ -284,7 +284,7 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
       </div>
 
       {/* KEY LEVELS */}
-      {ns.phase1.key_levels && ns.phase1.key_levels.current_price > 0 && (
+      {ns.phase1?.key_levels && ns.phase1.key_levels.current_price > 0 && (
         <div
           className="rounded-lg p-2 mb-2 bg-blue-900/20 border border-blue-500/30 cursor-pointer hover:bg-blue-900/30 transition-all"
           onClick={() => toggleExpand('levels')}
@@ -354,8 +354,8 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div
           className={`rounded p-2 cursor-pointer transition-all ${
-            ns.phase2.tier === 'HEALTHY' ? 'bg-green-500/10 hover:bg-green-500/20' :
-            ns.phase2.tier === 'DEGRADED' ? 'bg-yellow-500/10 hover:bg-yellow-500/20' :
+            ns.phase2?.tier === 'HEALTHY' ? 'bg-green-500/10 hover:bg-green-500/20' :
+            ns.phase2?.tier === 'DEGRADED' ? 'bg-yellow-500/10 hover:bg-yellow-500/20' :
             'bg-red-500/10 hover:bg-red-500/20'
           }`}
           onClick={() => toggleExpand('health')}
@@ -365,13 +365,13 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
             <span className="text-gray-600">i</span>
           </div>
           <div className={`font-medium ${
-            ns.phase2.tier === 'HEALTHY' ? 'text-green-400' :
-            ns.phase2.tier === 'DEGRADED' ? 'text-yellow-400' :
+            ns.phase2?.tier === 'HEALTHY' ? 'text-green-400' :
+            ns.phase2?.tier === 'DEGRADED' ? 'text-yellow-400' :
             'text-red-400'
           }`}>
-            {ns.phase2.tier === 'HEALTHY' ? 'Healthy' :
-             ns.phase2.tier === 'DEGRADED' ? 'Degraded' :
-             'Unstable'} ({ns.phase2.health_score}%)
+            {ns.phase2?.tier === 'HEALTHY' ? 'Healthy' :
+             ns.phase2?.tier === 'DEGRADED' ? 'Degraded' :
+             'Unstable'} ({ns.phase2?.health_score ?? 0}%)
           </div>
           {expanded === 'health' && (
             <div className="mt-2 pt-2 border-t border-gray-700 space-y-2">
@@ -387,8 +387,8 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
 
         <div
           className={`rounded p-2 cursor-pointer transition-all ${
-            ns.phase3.throttle === 'OPEN' ? 'bg-green-500/10 hover:bg-green-500/20' :
-            ns.phase3.throttle === 'LIMITED' ? 'bg-yellow-500/10 hover:bg-yellow-500/20' :
+            ns.phase3?.throttle === 'OPEN' ? 'bg-green-500/10 hover:bg-green-500/20' :
+            ns.phase3?.throttle === 'LIMITED' ? 'bg-yellow-500/10 hover:bg-yellow-500/20' :
             'bg-red-500/10 hover:bg-red-500/20'
           }`}
           onClick={() => toggleExpand('window')}
@@ -398,12 +398,12 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
             <span className="text-gray-600">i</span>
           </div>
           <div className={`font-medium ${
-            ns.phase3.throttle === 'OPEN' ? 'text-green-400' :
-            ns.phase3.throttle === 'LIMITED' ? 'text-yellow-400' :
+            ns.phase3?.throttle === 'OPEN' ? 'text-green-400' :
+            ns.phase3?.throttle === 'LIMITED' ? 'text-yellow-400' :
             'text-red-400'
           }`}>
-            {ns.phase3.throttle === 'OPEN' ? 'Open' :
-             ns.phase3.throttle === 'LIMITED' ? 'Limited' :
+            {ns.phase3?.throttle === 'OPEN' ? 'Open' :
+             ns.phase3?.throttle === 'LIMITED' ? 'Limited' :
              'Blocked'}
           </div>
           {expanded === 'window' && (
