@@ -178,16 +178,19 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
     failure_risk: 0
   }
 
+  // Safe access to phase4 with defaults
+  const phase4Allowed = ns.phase4?.allowed ?? false
+
   return (
     <div className="pt-3 border-t border-gray-800">
       <div className="flex items-center justify-between mb-2">
         <span className="text-gray-500 text-xs">MARKET STRUCTURE</span>
         <span className={`text-xs px-2 py-0.5 rounded ${
-          ns.phase4.allowed
+          phase4Allowed
             ? 'bg-green-500/20 text-green-400'
             : 'bg-red-500/20 text-red-400'
         }`}>
-          {ns.phase4.allowed ? 'TRADE ALLOWED' : 'STAND DOWN'}
+          {phase4Allowed ? 'TRADE ALLOWED' : 'STAND DOWN'}
         </span>
       </div>
 
@@ -407,14 +410,14 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
             <div className="mt-2 pt-2 border-t border-gray-700 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Density:</span>
-                <span className="font-mono">{ns.phase3.density_score}%</span>
+                <span className="font-mono">{ns.phase3?.density_score ?? 0}%</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Signals:</span>
                 <span className="font-mono">
-                  {ns.phase3.allowed_signals === 999 ? 'Unlimited' :
-                   ns.phase3.allowed_signals === 0 ? 'None' :
-                   ns.phase3.allowed_signals}
+                  {(ns.phase3?.allowed_signals ?? 0) === 999 ? 'Unlimited' :
+                   (ns.phase3?.allowed_signals ?? 0) === 0 ? 'None' :
+                   ns.phase3?.allowed_signals ?? 0}
                 </span>
               </div>
             </div>
@@ -423,24 +426,24 @@ function NorthstarDetails({ ns }: { ns: NorthstarData }) {
       </div>
 
       {/* Execution guidance or Stand Down */}
-      {ns.phase4.allowed ? (
+      {phase4Allowed ? (
         <div className="mt-2 p-2 bg-gray-800/50 rounded text-xs">
           <div className="flex justify-between items-center">
             <span className="text-gray-400">
               Play: <span className="text-white">
-                {ns.phase4.execution_mode === 'TREND_CONTINUATION' ? 'Trend Following' :
-                 ns.phase4.execution_mode === 'MEAN_REVERSION' ? 'Mean Reversion' :
-                 ns.phase4.execution_mode === 'SCALP' ? 'Quick Scalp' :
+                {ns.phase4?.execution_mode === 'TREND_CONTINUATION' ? 'Trend Following' :
+                 ns.phase4?.execution_mode === 'MEAN_REVERSION' ? 'Mean Reversion' :
+                 ns.phase4?.execution_mode === 'SCALP' ? 'Quick Scalp' :
                  'Standard'}
               </span>
             </span>
             <span className={`${
-              ns.phase4.risk_state === 'NORMAL' ? 'text-green-400' :
-              ns.phase4.risk_state === 'REDUCED' ? 'text-yellow-400' :
+              ns.phase4?.risk_state === 'NORMAL' ? 'text-green-400' :
+              ns.phase4?.risk_state === 'REDUCED' ? 'text-yellow-400' :
               'text-red-400'
             }`}>
-              Risk: {ns.phase4.risk_state === 'NORMAL' ? 'Normal' :
-                     ns.phase4.risk_state === 'REDUCED' ? 'Half' :
+              Risk: {ns.phase4?.risk_state === 'NORMAL' ? 'Normal' :
+                     ns.phase4?.risk_state === 'REDUCED' ? 'Half' :
                      'Quarter'}
             </span>
           </div>
