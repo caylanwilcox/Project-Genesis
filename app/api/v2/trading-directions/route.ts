@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-const ML_SERVER_URL = process.env.ML_SERVER_URL || 'http://localhost:5001'
+const ML_SERVER_URL = process.env.ML_SERVER_URL || 'https://project-genesis-6roa.onrender.com'
 
 export async function GET() {
   try {
