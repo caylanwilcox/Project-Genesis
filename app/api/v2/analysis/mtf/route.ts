@@ -48,28 +48,28 @@ export async function GET(request: Request) {
 
         // Transform intraday data to expected format
         const intraday = td.intraday ? {
-          v6: {
-            target_a_prob: td.intraday.probability_a || 0.5,
-            target_b_prob: td.intraday.probability_b || 0.5,
-            session: td.intraday.session || 'early',
-            signal: td.intraday.action === 'LONG' ? 'BULLISH' :
-                    td.intraday.action === 'SHORT' ? 'BEARISH' : 'NEUTRAL',
-            confidence: td.intraday.confidence || 0
-          }
+          v6: td.intraday.v6 ? {
+            target_a_prob: td.intraday.v6.target_a_prob ?? 0.5,
+            target_b_prob: td.intraday.v6.target_b_prob ?? 0.5,
+            session: td.intraday.v6.session || 'early',
+            signal: td.intraday.v6.signal || 'NEUTRAL'
+          } : null,
+          phase4: td.intraday.phase4 || null
         } : null
 
         // Transform swing data to expected format
         const swing = td.swing ? {
-          v6_swing: {
-            prob_1d_up: td.swing['1d']?.probability || 0.5,
-            prob_3d_up: td.swing['3d']?.probability || 0.5,
-            prob_5d_up: td.swing['5d']?.probability || 0.5,
-            prob_10d_up: td.swing['10d']?.probability || 0.5,
-            signal_1d: td.swing['1d']?.signal || 'NEUTRAL',
-            signal_3d: td.swing['3d']?.signal || 'NEUTRAL',
-            signal_5d: td.swing['5d']?.signal || 'NEUTRAL',
-            signal_10d: td.swing['10d']?.signal || 'NEUTRAL'
-          }
+          v6_swing: td.swing.v6_swing ? {
+            prob_1d_up: td.swing.v6_swing.prob_1d_up ?? 0.5,
+            prob_3d_up: td.swing.v6_swing.prob_3d_up ?? 0.5,
+            prob_5d_up: td.swing.v6_swing.prob_5d_up ?? 0.5,
+            prob_10d_up: td.swing.v6_swing.prob_10d_up ?? 0.5,
+            signal_1d: td.swing.v6_swing.signal_1d || 'NEUTRAL',
+            signal_3d: td.swing.v6_swing.signal_3d || 'NEUTRAL',
+            signal_5d: td.swing.v6_swing.signal_5d || 'NEUTRAL',
+            signal_10d: td.swing.v6_swing.signal_10d || 'NEUTRAL'
+          } : null,
+          phase4: td.swing.phase4 || null
         } : null
 
         transformed.tickers[ticker] = {
